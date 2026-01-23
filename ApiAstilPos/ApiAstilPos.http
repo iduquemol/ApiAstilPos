@@ -1,0 +1,6 @@
+@ApiAstilPos_HostAddress = http://localhost:5264
+
+GET {{ApiAstilPos_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

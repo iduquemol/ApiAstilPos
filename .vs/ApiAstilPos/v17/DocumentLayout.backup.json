@@ -1,0 +1,191 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Estudio\\ApiAstilPos\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\models\\ventadetalle.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\models\\ventadetalle.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\models\\venta.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\models\\venta.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\controllers\\ventascontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\controllers\\ventascontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\models\\printventa.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\models\\printventa.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\services\\facturapdfservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\services\\facturapdfservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\models\\facturaemaildto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\models\\facturaemaildto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|c:\\estudio\\apiastilpos\\apiastilpos\\models\\printitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5228CF9-9126-45FF-93DA-C19AEEF6A11F}|ApiAstilPos\\ApiAstilPos.csproj|solutionrelative:apiastilpos\\models\\printitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "VentaDetalle.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\VentaDetalle.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Models\\VentaDetalle.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\VentaDetalle.cs",
+              "RelativeToolTip": "ApiAstilPos\\Models\\VentaDetalle.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-22T20:59:09.709Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Venta.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\Venta.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Models\\Venta.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\Venta.cs",
+              "RelativeToolTip": "ApiAstilPos\\Models\\Venta.cs",
+              "ViewState": "AgIAAAwAAAAAAAAAAAA4wBoAAAAXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-22T20:56:32.217Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Program.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Program.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Program.cs",
+              "RelativeToolTip": "ApiAstilPos\\Program.cs",
+              "ViewState": "AgIAAB8AAAAAAAAAAAAgwDYAAABYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-22T03:58:00.425Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "FacturaEmailDto.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\FacturaEmailDto.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Models\\FacturaEmailDto.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\FacturaEmailDto.cs",
+              "RelativeToolTip": "ApiAstilPos\\Models\\FacturaEmailDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAARAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-08T18:57:05.009Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "EMailService.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Services\\EMailService.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Services\\EMailService.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Services\\EMailService.cs",
+              "RelativeToolTip": "ApiAstilPos\\Services\\EMailService.cs",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAQwEoAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-14T21:35:01.414Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "PrintItem.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\PrintItem.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Models\\PrintItem.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\PrintItem.cs",
+              "RelativeToolTip": "ApiAstilPos\\Models\\PrintItem.cs",
+              "ViewState": "AgIAAAEAAAAAAAAAAAAiwBcAAAA6AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-14T19:49:58.545Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "PrintVenta.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\PrintVenta.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Models\\PrintVenta.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Models\\PrintVenta.cs",
+              "RelativeToolTip": "ApiAstilPos\\Models\\PrintVenta.cs",
+              "ViewState": "AgIAAHsAAAAAAAAAAAA0wI8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-14T16:43:41.876Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "FacturaPdfService.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Services\\FacturaPdfService.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Services\\FacturaPdfService.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Services\\FacturaPdfService.cs",
+              "RelativeToolTip": "ApiAstilPos\\Services\\FacturaPdfService.cs",
+              "ViewState": "AgIAAK4AAAAAAAAAAAAtwMYAAABYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-14T16:40:10.406Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "VentasController.cs",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Controllers\\VentasController.cs",
+              "RelativeDocumentMoniker": "ApiAstilPos\\Controllers\\VentasController.cs",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\Controllers\\VentasController.cs",
+              "RelativeToolTip": "ApiAstilPos\\Controllers\\VentasController.cs",
+              "ViewState": "AgIAAEYAAAAAAAAAAAAtwFUAAABXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-03T19:28:55.514Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\appsettings.json",
+              "RelativeDocumentMoniker": "ApiAstilPos\\appsettings.json",
+              "ToolTip": "C:\\Estudio\\ApiAstilPos\\ApiAstilPos\\appsettings.json",
+              "RelativeToolTip": "ApiAstilPos\\appsettings.json",
+              "ViewState": "AgIAAA8AAAAAAAAAAAAAACkAAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-10-31T20:03:53.69Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
