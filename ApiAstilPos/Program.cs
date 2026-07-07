@@ -57,6 +57,8 @@ namespace ApiAstilPos
                 });
             }
 
+            app.UseRouting(); 
+
             app.UseCors("AllowAll");
 
             app.UseAuthorization();

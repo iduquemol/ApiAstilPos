@@ -63,6 +63,85 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpGet("terceros-proveedores")]
+        public async Task<IActionResult> GetTercerosProveedores()
+        {
+            _logger.LogInformation("Obteniendo lista de terceros proveedores");
+
+            try
+            {
+                var tercerosProveedores = new List<TerceroProveedor>();
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Read_tercerosProveedores", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var jsonTercerosProveedores = reader.IsDBNull(reader.GetOrdinal("proveedores"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("proveedores"));
+                                tercerosProveedores = JsonConvert.DeserializeObject<List<TerceroProveedor>>(jsonTercerosProveedores);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(tercerosProveedores);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al obtener terceros: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
+        [HttpPost("terceros-busqueda")]
+        public async Task<IActionResult> GetTercerosBusqueda([FromBody] JsonElement request)
+        {
+            _logger.LogInformation($"Buscando terceros ");
+
+            try
+            {                
+                var query = request.TryGetProperty("query", out var queryElement)
+                    ? queryElement.GetString()
+                    : null;
+
+                var terceros = new List<Tercero>();
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Search_terceros", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@searchText", query ?? (object)DBNull.Value);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var jsonTercero = reader.IsDBNull(reader.GetOrdinal("tercero"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("tercero"));
+                                terceros = JsonConvert.DeserializeObject<List<Tercero>>(jsonTercero);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(terceros);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al obtener terceros: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
         [HttpPost("terceros")]
         public async Task<IActionResult> CreateTercero([FromBody] JsonElement tercerosJson)
         {
@@ -129,7 +208,7 @@ namespace ApiAstilPos.Controllers
             }
         }
 
-        [HttpDelete]
+        [HttpDelete("terceros")]
         public async Task<IActionResult> DeleteTercero([FromBody] JObject request)
         {
             _logger.LogInformation("Borrando un tercero");

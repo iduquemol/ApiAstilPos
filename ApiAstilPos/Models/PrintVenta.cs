@@ -82,7 +82,7 @@ namespace ApiAstilPos.Models
 
         public string NombreUsuario { get; set; }
 
-        public int PlazoDias { get; set; }
+        public int? PlazoDias { get; set; }
 
         public string? FechaVencimiento { get; set; }
 

@@ -143,7 +143,7 @@ namespace ApiAstilPos.Services
                         });
                         col.Item().Text(text =>
                         {
-                            text.Span("Placa: ").Bold().FontSize(8);
+                            text.Span("Placa / Orden: ").Bold().FontSize(8);
                             text.Span(factura.OrdenReferencia).FontSize(8);
                         });
                     });
@@ -383,19 +383,19 @@ namespace ApiAstilPos.Services
                         });
                         col.Item().Border(1).Padding(3).Row(innerRow =>
                         {
-                            innerRow.RelativeItem().Text("RETENCIÓN FUENTE 4%").FontSize(8);
+                            innerRow.RelativeItem().Text("RETENCIÓN FUENTE ").FontSize(8);
                             innerRow.RelativeItem().AlignRight().Text($"$ COP {factura.TotalReteRenta:N2}").FontSize(8);
                         });
                         col.Item().Border(1).Padding(3).Row(innerRow =>
                         {
-                            innerRow.RelativeItem().Text("RETENCIÓN ICA 9.66").FontSize(8);
+                            innerRow.RelativeItem().Text("RETENCIÓN ICA ").FontSize(8);
                             innerRow.RelativeItem().AlignRight().Text($"$ COP {factura.TotalReteIca:N2}").FontSize(8);
                         });
                         col.Item().Border(1).Padding(3).Row(innerRow =>
                         {
-                            innerRow.RelativeItem().Text("RETENCIÓN IVA 15%").FontSize(8);
+                            innerRow.RelativeItem().Text("RETENCIÓN IVA ").FontSize(8);
                             innerRow.RelativeItem().AlignRight().Text($"$ COP {factura.TotalReteIva:N2}").FontSize(8);
-                        });                       
+                        });
                         col.Item().Border(1).Background(Colors.Grey.Lighten3).Padding(3).Row(innerRow =>
                         {
                             innerRow.RelativeItem().Text("Total a pagar").Bold().FontSize(9);

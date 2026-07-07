@@ -19,6 +19,9 @@ namespace ApiAstilPos.Models
         public decimal PorcentajeReteIva { get; set; }
         public decimal PorcentajeReteRenta { get; set; }
         public decimal PorcentajeReteIca { get; set; }
+        public long? IdTerceroMandato { get; set; } = 0;
+        public bool? IndicadorMandato { get; set; } = false;
+        public bool? ProductoActivo { get; set; } = false;
         public TributoProducto[] TributosProducto { get; set; }      
     }
 }

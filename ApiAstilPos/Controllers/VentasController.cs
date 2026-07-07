@@ -4,10 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using QRCoder;
 using System.Data;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using System.IO.Compression;
 using JsonException = Newtonsoft.Json.JsonException;
 
 namespace ApiAstilPos.Controllers
@@ -117,9 +118,14 @@ namespace ApiAstilPos.Controllers
             try
             {
                 var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt16()
+                    ? ventaElement.GetInt32()
                     : 0;
 
+                var idMetodoDian = request.TryGetProperty("idMetodoDian", out var metodoDianElement)
+                  ? metodoDianElement.GetInt16()
+                  : 0;
+
+                //_logger.LogInformation("Print-Venta " + idVenta);
                 var printVenta = new PrintVenta();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -128,6 +134,7 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@idVenta", idVenta);
+                        command.Parameters.AddWithValue("@idMetodoDian", idMetodoDian);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -277,9 +284,13 @@ namespace ApiAstilPos.Controllers
             try
             {
                 var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt16()
+                    ? ventaElement.GetInt32()
                     : 0;
+                var idMetodoDian = request.TryGetProperty("idMetodoDian", out var metodoDianElement)
+                  ? metodoDianElement.GetInt16()
+                  : 0;
 
+                //_logger.LogInformation("Preview-pdf " + idVenta);
                 PrintVenta printVenta = null;
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -288,6 +299,7 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@idVenta", idVenta);
+                        command.Parameters.AddWithValue("@idMetodoDian", idMetodoDian);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -296,7 +308,7 @@ namespace ApiAstilPos.Controllers
                                 var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
                                     ? "[]"
                                     : reader.GetString(reader.GetOrdinal("venta"));
-                                printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                                printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);  
                             }
                         }
                     }
@@ -304,7 +316,7 @@ namespace ApiAstilPos.Controllers
 
                 // Generar PDF
                 var pdfService = new FacturaPdfService();
-                byte[] pdfBytes = pdfService.GenerarPdfFactura(printVenta,1);
+                 byte[] pdfBytes = pdfService.GenerarPdfFactura(printVenta,idMetodoDian);
 
                 // Retornar el PDF para visualización en el navegador
                 return File(pdfBytes, "application/pdf", $"Preview_Factura_{idVenta}.pdf");
@@ -321,7 +333,7 @@ namespace ApiAstilPos.Controllers
         {
             object bodyDian = null;
             var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt16()
+                    ? ventaElement.GetInt32()
                     : 0;
 
             var idMetodoDian = request.TryGetProperty("idmetododian", out var metodoDianElement)
@@ -580,7 +592,7 @@ namespace ApiAstilPos.Controllers
                                 // Convertir el string a JSON y retornarlo
                                 try
                                 {
-                                    var jsonResponse = JsonConvert.DeserializeObject<object>(responseProcesarNova.contentResponse);
+                                    var jsonResponse = JsonConvert.DeserializeObject<List<ResponseProcesarNova>>(responseProcesarNova.contentResponse);
                                     return Ok(jsonResponse);
                                 }
                                 catch (Newtonsoft.Json.JsonException jsonEx)
@@ -1106,7 +1118,7 @@ namespace ApiAstilPos.Controllers
         {
             object bodyDian = null;
             var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt16()
+                    ? ventaElement.GetInt32()
                     : 0;
 
             var idMetodoDian = request.TryGetProperty("idmetododian", out var metodoDianElement)
@@ -1398,6 +1410,188 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpPost("obtener-xml")]
+        public async Task<IActionResult> ObtenerXml([FromBody] JsonElement request)
+        {
+            object idVenta = null;
+            string attachedDocument = null;
+            var num_doc = request.TryGetProperty("num_doc", out var numDoc)
+                   ? numDoc.ToString()
+                   : "0";
+
+            using (var connection = new SqlConnection(GetConnectionString()))
+            {
+                await connection.OpenAsync();
+
+                using (var command2 = new SqlCommand("sp_Response_ventaExterna", connection))
+                {
+                    command2.CommandType = CommandType.StoredProcedure;
+                    command2.Parameters.AddWithValue("@num_doc", num_doc);
+
+                    using (var reader = await command2.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            idVenta = reader.IsDBNull(reader.GetOrdinal("idVenta"))
+                                ? null
+                                : reader.GetInt64(reader.GetOrdinal("idVenta"));
+
+                            attachedDocument = reader.IsDBNull(reader.GetOrdinal("attachedDocument"))
+                                ? null
+                                : reader.GetString(reader.GetOrdinal("attachedDocument"));
+                        }
+                    }
+                }
+
+                if (idVenta == null || Convert.ToInt64(idVenta) <= 0)
+                {
+                    _logger.LogError("No se pudo obtener un ID de venta válido.");
+                    return BadRequest("Error: No se encontró la venta.");
+                }
+
+                if (string.IsNullOrEmpty(attachedDocument))
+                {
+                    _logger.LogError("No se pudo obtener el documento XML adjunto.");
+                    return BadRequest("Error: No se encontró el documento XML.");
+                }
+
+                try
+                {
+                    // Convertir de base64 a bytes
+                    byte[] xmlBytes = Convert.FromBase64String(attachedDocument);
+                    _logger.LogInformation($"XML obtenido correctamente, tamaño: {xmlBytes.Length} bytes");                   
+
+                    // Retornar el XML como archivo descargable
+                    return File(xmlBytes, "application/xml");
+                }
+                catch (FormatException ex)
+                {
+                    _logger.LogError($"Error al decodificar base64: {ex.Message}");
+                    return BadRequest("Error: El documento adjunto no tiene un formato base64 válido.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error al generar archivo XML: {ex.Message}");
+                    return BadRequest($"Error: {ex.Message}");
+                }
+            }
+        }
+
+        [HttpPost("enviar-correo")]
+        public async Task<IActionResult> EnviarCorreo([FromBody] JsonElement request)
+        {
+            object idVenta = null;
+            string attachedDocument = null;
+            var num_doc = request.TryGetProperty("num_doc", out var numDoc)
+                   ? numDoc.ToString()
+                   : "0";
+            var idMetodoDian = request.TryGetProperty("idMetodoDian", out var metodoDianElement)
+                   ? metodoDianElement.GetInt16()
+                   : 0;
+
+            using (var connection = new SqlConnection(GetConnectionString()))
+            {
+                await connection.OpenAsync();
+
+                using (var command2 = new SqlCommand("sp_Response_ventaExterna", connection))
+                {
+                    command2.CommandType = CommandType.StoredProcedure;
+                    command2.Parameters.AddWithValue("@num_doc", num_doc);
+
+                    using (var reader = await command2.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            idVenta = reader.IsDBNull(reader.GetOrdinal("idVenta"))
+                                ? null
+                                : reader.GetInt64(reader.GetOrdinal("idVenta"));
+
+                            attachedDocument = reader.IsDBNull(reader.GetOrdinal("attachedDocument"))
+                                ? null
+                                : reader.GetString(reader.GetOrdinal("attachedDocument"));
+                        }
+                    }
+                }
+
+                if (idVenta == null || Convert.ToInt64(idVenta) <= 0)
+                {
+                    _logger.LogError("No se pudo obtener un ID de venta válido.");
+                    return BadRequest("Error: No se encontró la venta.");
+                }
+
+                if (string.IsNullOrEmpty(attachedDocument))
+                {
+                    _logger.LogError("No se pudo obtener el documento XML adjunto.");
+                    return BadRequest("Error: No se encontró el documento XML.");
+                }
+
+                try
+                {
+                    // Convertir de base64 a bytes
+                    byte[] xmlBytes = Convert.FromBase64String(attachedDocument);
+                    _logger.LogInformation($"XML obtenido correctamente, tamaño: {xmlBytes.Length} bytes");
+
+                    // Obtener datos para imprimir la factura
+                    PrintVenta printVenta = null;
+                    using (var command = new SqlCommand("sp_Print_ventaId", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@idVenta", idVenta);
+                        command.Parameters.AddWithValue("@idMetodoDian", idMetodoDian);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("venta"));
+                                printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                            }
+                        }
+                    }
+
+                    // Generar PDF
+                    var pdfService = new FacturaPdfService();
+                    byte[] pdfBytes = pdfService.GenerarPdfFactura(printVenta, idMetodoDian);
+
+                    _logger.LogInformation("PDF de factura generado correctamente.");
+
+                    // Preparar datos del email
+                    var facturaEmailDto = new FacturaEmailDto
+                    {
+                        Email = printVenta.ClienteEmail,
+                        NombreCliente = printVenta.ClienteRazonSocial,
+                        NumeroDocumento = printVenta.NumeroVenta.ToString(),
+                        SubjectEmail = printVenta.SubjectEmail ?? string.Empty,
+                        Total = printVenta.TotalVenta,
+                        PdfAttachment = pdfBytes,
+                        PdfFileName = idMetodoDian == 1 ? $"Factura_{printVenta.NumeroVenta}.pdf" : $"NotaCredito_{printVenta.NumeroVenta}.pdf",
+                        XmlAttachment = xmlBytes,
+                        XmlFileName = idMetodoDian == 1 ? $"Factura_{printVenta.NumeroVenta}.xml" : $"NotaCredito_{printVenta.NumeroVenta}.xml",
+                        FacturadorNombre = printVenta.FacturadorNombre ?? string.Empty,
+                    };
+
+                    // Enviar email con PDF adjunto
+                    await _emailService.SendFacturaEmailAsync(facturaEmailDto, idMetodoDian);
+                    _logger.LogInformation($"Email con PDF enviado exitosamente a {facturaEmailDto.Email}");
+                    return Ok(new
+                    {
+                        message = "Email enviado correctamente"                        
+                    });
+                }
+                catch (FormatException ex)
+                {
+                    _logger.LogError($"Error al decodificar base64: {ex.Message}");
+                    return BadRequest("Error: El documento adjunto no tiene un formato base64 válido.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error al generar archivo XML: {ex.Message}");
+                    return BadRequest($"Error: {ex.Message}");
+                }
+            }
+        }
     }
 
     public class ApiResponse
@@ -1406,5 +1600,26 @@ namespace ApiAstilPos.Controllers
         public string numeroFacturaDian { get; set; }
         public string contentResponse { get; set; }
         public string ErrorMessage { get; set; }
+    }
+
+    public class ResponseProcesarNova
+    {
+        [JsonProperty("mensaje")]
+        public string mensaje { get; set; }
+
+        [JsonProperty("ano_doc")]
+        public string ano_doc { get; set; }
+
+        [JsonProperty("per_doc")]
+        public string per_doc { get; set; }
+
+        [JsonProperty("sub_tip")]
+        public string sub_tip { get; set; }
+
+        [JsonProperty("num_doc")]
+        public string num_doc { get; set; }
+
+        [JsonProperty("contab")]
+        public int contab { get; set; }
     }
 }
