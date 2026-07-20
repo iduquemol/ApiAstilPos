@@ -10,9 +10,11 @@ namespace ApiAstilPos.Models
         public string DigitoVerificacion { get; set; }
         public string NumeroIdentificacion { get; set; }
         public string PrimerNombre { get; set; }
+        public string? SegundoNombre { get; set; }
         public string PrimerApellido { get; set; }
+        public string? SegundoApellido { get; set; }
         public string RazonSocial { get; set; }
-        public decimal? TelefonoTercero { get; set; }
+        public string? TelefonoTercero { get; set; }
         public string DireccionTercero { get; set; }
         public long IdMunicipio { get; set; }
         public string NombreMunicipio { get; set; }
