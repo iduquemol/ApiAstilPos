@@ -173,5 +173,49 @@ namespace ApiAstilPos.Controllers
                 return BadRequest($"Error: {ex.Message}");
             }
         }
+
+        [HttpDelete("productos/{id}")]
+        public async Task<IActionResult> DeleteProducto(int id)
+        {
+            _logger.LogInformation($"Intentando eliminar el producto con ID: {id}");
+
+            try
+            {
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Delete_productosId", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@idProducto", id);
+
+                        // Como el SP retorna un SELECT con el idProducto afectado (o 0 si no se borró)
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                var idRetornado = reader.GetInt64(reader.GetOrdinal("idProducto"));
+
+                                if (idRetornado == 0)
+                                {
+                                    _logger.LogWarning($"No se pudo eliminar el producto con ID {id}. Posiblemente tiene ventas asociadas o falló la transacción.");
+                                    return BadRequest("No se puede eliminar el producto porque tiene registros asociados (como ventas) o no existe.");
+                                }
+
+                                _logger.LogInformation($"Producto con ID {id} eliminado exitosamente.");
+                                return Ok(new { message = "Producto eliminado correctamente", idProducto = idRetornado });
+                            }
+                        }
+
+                        return BadRequest("No se recibió respuesta de confirmación de la base de datos.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al eliminar producto con ID {id}: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
     }
 }
