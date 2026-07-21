@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 
-namespace azureFunctionPos.Models
+namespace ApiAstilPos.Models
 {
     public class TipoPersona
     {
