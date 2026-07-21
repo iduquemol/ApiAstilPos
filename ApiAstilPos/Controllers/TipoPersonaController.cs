@@ -1,13 +1,13 @@
-﻿using azureFunctionPos.Models;
+﻿using ApiAstilPos.Models;
 using Microsoft.AspNetCore.Mvc;
-using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
+using System.Text.Json;
 
 namespace ApiAstilPos.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/tipospersona")]
     public class TipoPersonaController : ControllerBase
     {
         private readonly IConfiguration _configuration;
@@ -32,6 +32,7 @@ namespace ApiAstilPos.Controllers
             try
             {
                 var tipos = new List<TipoPersona>();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -41,18 +42,21 @@ namespace ApiAstilPos.Controllers
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                tipos.Add(new TipoPersona
+                                int ordinal = reader.GetOrdinal("tiposPersona");
+                                if (!reader.IsDBNull(ordinal))
                                 {
-                                    IdTipoPersona = reader.GetInt16(reader.GetOrdinal("idTipoPersona")),
-                                    CodigoTipoPersona = reader.IsDBNull(reader.GetOrdinal("codigoTipoPersona"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("codigoTipoPersona")),
-                                    NombreTipoPersona = reader.IsDBNull(reader.GetOrdinal("nombreTipoPersona"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("nombreTipoPersona"))
-                                });
+                                    string jsonResult = reader.GetString(ordinal);
+
+                                    // Opciones para ignorar mayúsculas/minúsculas al mapear propiedades JSON
+                                    var options = new JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    };
+
+                                    tipos = JsonSerializer.Deserialize<List<TipoPersona>>(jsonResult, options) ?? new List<TipoPersona>();
+                                }
                             }
                         }
                     }
