@@ -1,21 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ApiAstilPos.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using ApiAstilPos.Models;
 using System.Data;
-using Microsoft.Data.SqlClient;
 using System.Text.Json;
 
 namespace ApiAstilPos.Controllers
 {
     [ApiController]
     [Route("api")]
-    public class resolucionesController : ControllerBase
+    public class ResolucionesController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<resolucionesController> _logger;
+        private readonly ILogger<ResolucionesController> _logger;
 
-        public resolucionesController(IConfiguration configuration, ILogger<resolucionesController> logger)
+        public ResolucionesController(IConfiguration configuration, ILogger<ResolucionesController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -27,39 +27,37 @@ namespace ApiAstilPos.Controllers
         }
 
         [HttpGet("resoluciones")]
-        public async Task<IActionResult> Getresoluciones()
+        public async Task<IActionResult> GetResoluciones()
         {
-            _logger.LogInformation("Obteniendo lista de Resoluciones");
-
             try
             {
                 var resoluciones = new List<resoluciones>();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_resoluciones", connection))
+                    using (var command = new SqlCommand("sp_Read_resolucionesFacturacion", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonresoluciones = reader.IsDBNull(reader.GetOrdinal("resoluciones"))
+                                var jsonResoluciones = reader.IsDBNull(reader.GetOrdinal("resoluciones"))
                                     ? "[]"
                                     : reader.GetString(reader.GetOrdinal("resoluciones"));
-                                resoluciones = JsonConvert.DeserializeObject<List<resoluciones>>(jsonresoluciones);
+
+                                resoluciones = JsonConvert.DeserializeObject<List<resoluciones>>(jsonResoluciones)
+                                               ?? new List<resoluciones>();
                             }
                         }
                     }
                 }
-
                 return Ok(resoluciones);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener resoluciones: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al obtener resoluciones");
+                return StatusCode(500, "Internal server error");
             }
         }
 
@@ -76,10 +74,10 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Insert_resolucionesId", connection))
+                    using (var command = new SqlCommand("sp_Create_resolucionesFacturacion", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@idResoluciones", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@resolucionesFacturacion", requestBody ?? (object)DBNull.Value);
 
                         // Ejecutar el SP
                         var result = await command.ExecuteNonQueryAsync();
@@ -109,10 +107,10 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Update_ResolucionesId", connection))
+                    using (var command = new SqlCommand("sp_Update_resolucionesFacturacion", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@resoluciones", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@resolucionesFacturacion", requestBody ?? (object)DBNull.Value);
 
                         // Ejecutar el SP
                         var result = await command.ExecuteNonQueryAsync();
@@ -143,7 +141,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Delete_ResolucionesId", connection))
+                    using (var command = new SqlCommand("sp_Delete_resolucionesFacturacion", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@idResoluciones", idResoluciones);
