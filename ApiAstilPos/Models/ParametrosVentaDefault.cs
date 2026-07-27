@@ -12,5 +12,19 @@ namespace ApiAstilPos.Models
         public TipoDocumentoDefault[] DocumentoVenta { get; set; }
         public TipoDocumentoDefault[] DocumentoNotaCredito { get; set; }
         public TipoDocumentoDefault[] DocumentoCotizacion { get; set; }
+        public ListaPrecioDto[] ListaPrecios { get; set; }
+        public TipoRegimenDto[] TipoRegimen { get; set; }
+    }
+
+    public class ListaPrecioDto
+    {
+        public long IdListaPrecio { get; set; }
+        public string NombreListaPrecio { get; set; }
+    }
+
+    public class TipoRegimenDto
+    {
+        public long IdTipoRegimen { get; set; }
+        public string NombreRegimen { get; set; }
     }
 }
