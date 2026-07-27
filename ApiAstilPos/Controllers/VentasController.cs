@@ -34,40 +34,40 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet("parametrosVentaDefault")]
-        public async Task<IActionResult> GetParametrosVentaDefault()
-        {
-            _logger.LogInformation("Obteniendo tercero de venta por defecto");
+        //[HttpGet("parametrosVentaDefault")]
+        //public async Task<IActionResult> GetParametrosVentaDefault()
+        //{
+        //    _logger.LogInformation("Obteniendo tercero de venta por defecto");
 
-            try
-            {
-                var parametrosVentaDefault = new ParametrosVentaDefault();
-                using var connection = new SqlConnection(GetConnectionString());
-                {
-                    await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_parametrosVentaDefault", connection))
-                    {
-                        command.CommandType = CommandType.StoredProcedure;
+        //    try
+        //    {
+        //        var parametrosVentaDefault = new ParametrosVentaDefault();
+        //        using var connection = new SqlConnection(GetConnectionString());
+        //        {
+        //            await connection.OpenAsync();
+        //            using (var command = new SqlCommand("sp_Read_parametrosVentaDefault", connection))
+        //            {
+        //                command.CommandType = CommandType.StoredProcedure;
 
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                var jsonTerceroVenta = reader.IsDBNull(reader.GetOrdinal("parametrosVenta")) ? "[]" : reader.GetString(reader.GetOrdinal("parametrosVenta"));
-                                parametrosVentaDefault = JsonConvert.DeserializeObject<ParametrosVentaDefault>(jsonTerceroVenta);
-                            }
-                        }
-                    }
-                }
-                _logger.LogInformation($"Parametros Venta Default obtenido: {parametrosVentaDefault}");
-                return Ok(parametrosVentaDefault);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error al obtener parametros de venta por defecto: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
-            }
-        }
+        //                using (var reader = await command.ExecuteReaderAsync())
+        //                {
+        //                    while (await reader.ReadAsync())
+        //                    {
+        //                        var jsonTerceroVenta = reader.IsDBNull(reader.GetOrdinal("parametrosVenta")) ? "[]" : reader.GetString(reader.GetOrdinal("parametrosVenta"));
+        //                        parametrosVentaDefault = JsonConvert.DeserializeObject<ParametrosVentaDefault>(jsonTerceroVenta);
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        _logger.LogInformation($"Parametros Venta Default obtenido: {parametrosVentaDefault}");
+        //        return Ok(parametrosVentaDefault);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError($"Error al obtener parametros de venta por defecto: {ex.Message}");
+        //        return BadRequest($"Error: {ex.Message}");
+        //    }
+        //}
 
         [HttpPost("obtener-venta")]
         public async Task<IActionResult> PostVentaId([FromBody] JsonElement request)
