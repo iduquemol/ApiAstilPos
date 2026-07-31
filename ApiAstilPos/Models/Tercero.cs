@@ -31,6 +31,18 @@ namespace ApiAstilPos.Models
         public long? IdTipoRegimen { get; set; }
         public string NombreTipoRegimen { get; set; }
         public long? IdListaPreciosTercero { get; set; }
-        public ResponsabilidadTercero[]  ResponsabilidadesTerceros{ get; set; }
+
+        // Mapeo de retenciones/tributos (igual que en ITercero.ts)
+        public bool? RetenedorIva { get; set; }
+        public bool? RetenedorRenta { get; set; }
+        public bool? RetenedorIca { get; set; }
+        public bool? DeclaraRenta { get; set; }
+        public decimal? TarifaIca { get; set; }
+
+        // Los dos campos nuevos
+        public long? IdCodigoPostal { get; set; }
+        public string? RegistroMercantil { get; set; }
+
+        public ResponsabilidadTercero[] ResponsabilidadesTerceros { get; set; }
     }
 }

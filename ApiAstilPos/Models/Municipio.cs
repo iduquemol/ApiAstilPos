@@ -1,7 +1,8 @@
 #nullable enable
 using System;
+using ApiAstilPos.Models;
 
-namespace azureFunctionPos.Models
+namespace ApiAstilPos.Models
 {
     public class DepartamentoMunicipio
     {
@@ -17,6 +18,7 @@ namespace azureFunctionPos.Models
         public string? CodigoMunicipio { get; set; }
         public string? NombreMunicipio { get; set; }
         public long IdMunicipioFe { get; set; }
-        
+
+        public CodigoPostal[]? CodigosPostales { get; set; }
     }
 }
