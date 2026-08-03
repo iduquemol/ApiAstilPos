@@ -24,7 +24,7 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet]
+        [HttpGet("tiposDocumento")]
         public async Task<IActionResult> GetTiposDocumento()
         {
             _logger.LogInformation("Obteniendo lista de tipos de documento");
@@ -35,7 +35,7 @@ namespace ApiAstilPos.Controllers
                 using var connection = new SqlConnection(GetConnectionString());
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tiposdocumento", connection))
+                    using (var command = new SqlCommand("sp_Read_tiposDocumento", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
