@@ -1,0 +1,14 @@
+.vs/
+.vscode/
+.git/
+.gitignore
+*.md
+Dockerfile
+.dockerignore
+
+bin/
+obj/
+logs/
+ApiAstilPos/bin/
+ApiAstilPos/obj/
+ApiAstilPos/logs/

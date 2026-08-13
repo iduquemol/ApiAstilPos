@@ -234,7 +234,7 @@ namespace ApiAstilPos.Services
         // Método auxiliar para cargar la imagen
         private byte[] CargarImagenLogo()
         {
-            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "images", "LogoServitrans.png");
+            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Images", "LogoServitrans.png");
 
             if (File.Exists(logoPath))
             {
