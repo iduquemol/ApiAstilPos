@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
+using System.Text;
 using System.Text.Json;
 
 namespace ApiAstilPos.Controllers
@@ -12,8 +13,31 @@ namespace ApiAstilPos.Controllers
     [Route("api")]
     public class TercerosController : ControllerBase
     {
+        private static readonly HttpClient httpClient = new HttpClient();
         private readonly IConfiguration _configuration;
         private readonly ILogger<TercerosController> _logger;
+
+        // Mapeo de codigoTipoDocumentoId (catálogo interno, código DIAN de
+        // identificación) al catálogo oficial DIAN/UBL 2.1 "Tipos de Documento"
+        // (1-12) que espera el proveedor externo de facturación electrónica.
+        // No hay correspondencia 1:1 con idTipoDocumentoId ni con
+        // codigoTipoDocumentoId directamente; confirmado empíricamente para
+        // Cédula ("13" -> 3).
+        private static readonly Dictionary<string, int> TipoDocumentoExternoMap = new()
+        {
+            { "11", 1 },  // Registro civil
+            { "12", 2 },  // Tarjeta de identidad
+            { "13", 3 },  // Cédula de ciudadanía
+            { "21", 4 },  // Tarjeta de extranjería
+            { "22", 5 },  // Cédula de extranjería
+            { "31", 6 },  // NIT
+            { "41", 7 },  // Pasaporte
+            { "42", 8 },  // Documento de identificación extranjero
+            { "47", 9 },  // PEP
+            { "48", 10 }, // PPT
+            { "50", 11 }, // NIT de otro país
+            { "91", 12 }, // NUIP
+        };
 
         public TercerosController(IConfiguration configuration, ILogger<TercerosController> logger)
         {
@@ -142,6 +166,73 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpPost("terceros-consulta-externa")]
+        public async Task<IActionResult> ConsultarTerceroExterno([FromBody] JsonElement request)
+        {
+            _logger.LogInformation("Consultando datos de tercero en proveedor externo");
+
+            try
+            {
+                var codigoTipoDocumentoId = request.TryGetProperty("codigoTipoDocumentoId", out var codigoElement)
+                    ? codigoElement.GetString()
+                    : null;
+                var identificationNumber = request.TryGetProperty("identificationNumber", out var idElement)
+                    ? idElement.GetString()
+                    : null;
+
+                if (string.IsNullOrEmpty(codigoTipoDocumentoId) || string.IsNullOrEmpty(identificationNumber))
+                {
+                    return BadRequest("codigoTipoDocumentoId e identificationNumber son requeridos");
+                }
+
+                if (!TipoDocumentoExternoMap.TryGetValue(codigoTipoDocumentoId, out var typeDocumentIdentificationId))
+                {
+                    _logger.LogWarning($"No hay mapeo externo para codigoTipoDocumentoId: {codigoTipoDocumentoId}");
+                    return BadRequest("Tipo de documento no soportado para consulta externa");
+                }
+
+                var acquirerStatusUrl = _configuration["ApiExterna:AcquirerStatusUrl"];
+                var bearerToken = _configuration["ApiExterna:BearerToken"];
+
+                if (string.IsNullOrEmpty(acquirerStatusUrl))
+                {
+                    _logger.LogError("URL de consulta externa de terceros no configurada");
+                    return BadRequest("Configuración de API externa faltante");
+                }
+
+                var requestBody = new AcquirerStatusRequest
+                {
+                    environment = new AcquirerStatusEnvironment { type_environment_id = 1 },
+                    type_document_identification_id = typeDocumentIdentificationId,
+                    identification_number = identificationNumber
+                };
+
+                var jsonContent = JsonConvert.SerializeObject(requestBody);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                httpClient.DefaultRequestHeaders.Clear();
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
+
+                _logger.LogInformation($"Consultando proveedor externo para identificación: {identificationNumber}");
+                var response = await httpClient.PostAsync(acquirerStatusUrl, content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"Error en API externa de consulta de tercero: {response.StatusCode} - {responseContent}");
+                    return BadRequest("Error al consultar el proveedor externo");
+                }
+
+                var acquirerResponse = JsonConvert.DeserializeObject<AcquirerStatusResponse>(responseContent);
+                return Ok(acquirerResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al consultar tercero en proveedor externo: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
         [HttpPost("terceros")]
         public async Task<IActionResult> CreateTercero([FromBody] JsonElement tercerosJson)
         {
@@ -208,16 +299,16 @@ namespace ApiAstilPos.Controllers
             }
         }
 
-        [HttpDelete("terceros")]
-        public async Task<IActionResult> DeleteTercero([FromBody] JObject request)
+        [HttpDelete("terceros/{id}")]
+        public async Task<IActionResult> DeleteTercero(int id)
         {
             _logger.LogInformation("Borrando un tercero");
 
             try
             {
-                var idTercero = request["idtercero"]?.Value<long>() ?? 0;
-                _logger.LogInformation($"ID Tercero a borrar: {idTercero}");
-                var idTerceroBorrado = 0;
+                //var idTercero = request.?.Value<long>() ?? 0;
+                //_logger.LogInformation($"ID Tercero a borrar: {idTercero}");
+                long idTerceroBorrado = 0;
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -225,7 +316,7 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Delete_tercerosId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@idTercero", idTercero);
+                        command.Parameters.AddWithValue("@idTercero", id);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -233,7 +324,7 @@ namespace ApiAstilPos.Controllers
                             {
                                 idTerceroBorrado = reader.IsDBNull(reader.GetOrdinal("idTercero"))
                                     ? 0
-                                    : reader.GetInt32(reader.GetOrdinal("idTercero"));
+                                    : reader.GetInt64(reader.GetOrdinal("idTercero"));
                             }
                         }
 

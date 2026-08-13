@@ -2,7 +2,6 @@ using ApiAstilPos.Models;
 
 public class Producto
 {
-    
         public long IdProducto { get; set; }
         public string CodigoProducto { get; set; }
         public string NombreProducto { get; set; }
@@ -24,5 +23,6 @@ public class Producto
         public bool? ProductoActivo { get; set; } = false;
         public TributoProducto[] TributosProducto { get; set; }
         public PrecioProducto[] PreciosProducto { get; set; }
+    
     
 }
