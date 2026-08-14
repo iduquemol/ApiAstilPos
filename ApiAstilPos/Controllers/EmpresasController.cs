@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -23,17 +22,20 @@ namespace ApiAstilPos.Controllers
 
         private string GetConnectionString()
         {
-            return _configuration.GetConnectionString("SqlConnectionString");
+            return _configuration.GetConnectionString("SqlConnectionString")
+                ?? throw new InvalidOperationException("La cadena de conexión 'SqlConnectionString' no está configurada.");
         }
 
+        
         [HttpGet("empresas")]
-        public async Task<IActionResult> GettiposDocumentoExterno()
+        public async Task<IActionResult> GetEmpresaUnica()
         {
-            _logger.LogInformation("Obteniendo lista de empresas");
+            _logger.LogInformation("Obteniendo información de la empresa usuaria");
 
             try
             {
-                var empresas = new List<empresas>();
+                var empresasList = new List<empresas>();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -48,58 +50,36 @@ namespace ApiAstilPos.Controllers
                                 var jsonempresas = reader.IsDBNull(reader.GetOrdinal("empresas"))
                                     ? "[]"
                                     : reader.GetString(reader.GetOrdinal("empresas"));
-                                empresas = JsonConvert.DeserializeObject<List<empresas>>(jsonempresas);
+
+                                empresasList = JsonConvert.DeserializeObject<List<empresas>>(jsonempresas) ?? new List<empresas>();
                             }
                         }
                     }
                 }
 
-                return Ok(empresas);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error al obtener empresa: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
-            }
-        }
+                // Extraemos el primer registro existente (Registro Único)
+                var empresaUnica = empresasList.FirstOrDefault();
 
-        [HttpPost("empresas")]
-        public async Task<IActionResult> Createempresas([FromBody] JsonElement empresasJson)
-        {
-            _logger.LogInformation("Creando una nuevo empresa");
-
-            try
-            {
-                string requestBody = empresasJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
-
-                using (var connection = new SqlConnection(GetConnectionString()))
+                if (empresaUnica == null)
                 {
-                    await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Create_empresas", connection))
-                    {
-                        command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@empresas", requestBody ?? (object)DBNull.Value);
-
-                        // Ejecutar el SP
-                        var result = await command.ExecuteNonQueryAsync();
-
-                        _logger.LogInformation("Empresa creada correctamente.");
-                        return Ok(new { message = "Empresa creada correctamente.", rowsAffected = result });
-                    }
+                    // Si no existen registros aún, se puede retornar NoContent (204) o un objeto vacío
+                    return Ok(null);
                 }
+
+                return Ok(empresaUnica);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al crear empresa: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al obtener la empresa");
+                return StatusCode(500, new { message = "Error al obtener la empresa", error = ex.Message });
             }
         }
 
+        
         [HttpPut("empresas")]
-        public async Task<IActionResult> Updateempresas([FromBody] JsonElement empresasJson)
+        public async Task<IActionResult> UpdateEmpresa([FromBody] JsonElement empresasJson)
         {
-            _logger.LogInformation("Actualizando una empresa");
+            _logger.LogInformation("Actualizando la información de la empresa");
 
             try
             {
@@ -114,7 +94,6 @@ namespace ApiAstilPos.Controllers
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@empresas", requestBody ?? (object)DBNull.Value);
 
-                        // Ejecutar el SP
                         var result = await command.ExecuteNonQueryAsync();
 
                         _logger.LogInformation("Empresa actualizada correctamente.");
@@ -124,49 +103,8 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al actualizar empresa: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
-            }
-        }
-
-        [HttpDelete("empresas")]
-        public async Task<IActionResult> Deleteempresas([FromBody] JObject request)
-        {
-            _logger.LogInformation("Borrando una empresa");
-
-            try
-            {
-                var idempresas = request["idempresas"]?.Value<long>() ?? 0;
-                _logger.LogInformation($"ID empresa a borrar: {idempresas}");
-                var idempresasBorrado = 0;
-
-                using (var connection = new SqlConnection(GetConnectionString()))
-                {
-                    await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Delete_empresasId", connection))
-                    {
-                        command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@idempresas", idempresas);
-
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                idempresasBorrado = reader.IsDBNull(reader.GetOrdinal("idempresas"))
-                                    ? 0
-                                    : reader.GetInt32(reader.GetOrdinal("idempresas"));
-                            }
-                        }
-
-                        _logger.LogInformation("Empresa borrada correctamente.");
-                        return Ok(new { message = "Empresa borrada correctamente.", idempresasBorrado = idempresasBorrado });
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error al borrar empresa: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al actualizar la empresa");
+                return StatusCode(500, new { message = "Error al actualizar la empresa", error = ex.Message });
             }
         }
     }
