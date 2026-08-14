@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using QRCoder;
 using System.Data;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+
 using JsonException = Newtonsoft.Json.JsonException;
 
 namespace ApiAstilPos.Controllers
@@ -227,7 +229,10 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                string requestBody = JsonConvert.SerializeObject(venta);
+                string requestBody = JsonConvert.SerializeObject(venta, new JsonSerializerSettings
+                {
+                    ContractResolver = new CamelCasePropertyNamesContractResolver()
+                });
                 _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 object facturaId = null;
