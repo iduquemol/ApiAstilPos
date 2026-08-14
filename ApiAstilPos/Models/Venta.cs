@@ -6,12 +6,12 @@ namespace ApiAstilPos.Models
     public class Venta
     {
         public long IdVenta { get; set; }
-        public string IdTipoDocumento { get; set; }
-        public string NombreDocumento { get; set; }
+        public long IdTipoDocumento { get; set; }
+        public string? NombreDocumento { get; set; }
         public long IdFormaPago { get; set; }
         public long? IdMetodoDian { get; set; }
         public long NumeroVenta { get; set; }
-        public string PrefijoVenta { get; set; }
+        public string? PrefijoVenta { get; set; }
         public string FechaVenta { get; set; } = string.Empty;
         public bool EsBorrador { get; set; }
         public long IdPuntoVenta { get; set; }

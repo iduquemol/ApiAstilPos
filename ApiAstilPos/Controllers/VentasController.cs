@@ -76,11 +76,25 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt16()
-                    : 0 ;
+                // 1. Usar GetInt64() para soportar IDs grandes como 82161 sin desbordar Int16
+                long idVenta = 0;
+                if (request.TryGetProperty("idventa", out var ventaElement))
+                {
+                    idVenta = ventaElement.GetInt64();
+                }
+                else if (request.TryGetProperty("IdVenta", out var ventaElementPascal))
+                {
+                    idVenta = ventaElementPascal.GetInt64();
+                }
 
-                var venta = new Venta();
+                if (idVenta == 0)
+                {
+                    return BadRequest("El parametro idventa es requerido o invalido.");
+                }
+
+                Venta venta = null;
+
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -93,16 +107,32 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta")) ? "[]" : reader.GetString(reader.GetOrdinal("venta"));
-                                venta = JsonConvert.DeserializeObject<Venta>(jsonVenta);
+                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                    ? null
+                                    : reader.GetString(reader.GetOrdinal("venta"));
+
+                                if (!string.IsNullOrEmpty(jsonVenta))
+                                {
+                                    // 2. Si el SP devuelve un array JSON, deserializa el primer elemento o la lista
+                                    if (jsonVenta.TrimStart().StartsWith("["))
+                                    {
+                                        var listaVentas = JsonConvert.DeserializeObject<List<Venta>>(jsonVenta);
+                                        venta = listaVentas?.FirstOrDefault();
+                                    }
+                                    else
+                                    {
+                                        venta = JsonConvert.DeserializeObject<Venta>(jsonVenta);
+                                    }
+                                }
                             }
                         }
-
-                        _logger.LogInformation("Venta obtenida correctamente.");
-                        return Ok(venta);
                     }
                 }
+
+                _logger.LogInformation("Venta obtenida correctamente.");
+                return Ok(venta);
             }
+
             catch (Exception ex)
             {
                 _logger.LogError($"Error al obtener venta: {ex.Message}");
@@ -117,16 +147,34 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var idVenta = request.TryGetProperty("idventa", out var ventaElement)
-                    ? ventaElement.GetInt32()
-                    : 0;
+                // 1. Obtención segura del ID de la venta (Int64/long para evitar desbordamiento)
+                long idVenta = 0;
+                if (request.TryGetProperty("idventa", out var ventaElement))
+                {
+                    idVenta = ventaElement.GetInt64();
+                }
+                else if (request.TryGetProperty("IdVenta", out var ventaElementPascal))
+                {
+                    idVenta = ventaElementPascal.GetInt64();
+                }
 
-                var idMetodoDian = request.TryGetProperty("idMetodoDian", out var metodoDianElement)
-                  ? metodoDianElement.GetInt16()
-                  : 0;
+                short idMetodoDian = 0;
+                if (request.TryGetProperty("idMetodoDian", out var metodoDianElement))
+                {
+                    idMetodoDian = metodoDianElement.GetInt16();
+                }
+                else if (request.TryGetProperty("IdMetodoDian", out var metodoDianElementPascal))
+                {
+                    idMetodoDian = metodoDianElementPascal.GetInt16();
+                }
 
-                //_logger.LogInformation("Print-Venta " + idVenta);
-                var printVenta = new PrintVenta();
+                if (idVenta == 0)
+                {
+                    return BadRequest("El parametro idventa es requerido o invalido.");
+                }
+
+                PrintVenta printVenta = null;
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -140,24 +188,39 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta")) ? "[]" : reader.GetString(reader.GetOrdinal("venta"));
-                                printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                    ? null
+                                    : reader.GetString(reader.GetOrdinal("venta"));
+
+                                if (!string.IsNullOrEmpty(jsonVenta))
+                                {
+                                    // 2. Manejo seguro si el SP devuelve un array JSON [ ... ] o un objeto { ... }
+                                    if (jsonVenta.TrimStart().StartsWith("["))
+                                    {
+                                        var listaPrint = JsonConvert.DeserializeObject<List<PrintVenta>>(jsonVenta);
+                                        printVenta = listaPrint?.FirstOrDefault();
+                                    }
+                                    else
+                                    {
+                                        printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                                    }
+                                }
                             }
                         }
-
-                        _logger.LogInformation("Venta para imprimir obtenida correctamente.");
-                        return Ok(printVenta);
                     }
                 }
+
+                _logger.LogInformation("Venta para imprimir obtenida correctamente.");
+                return Ok(printVenta);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener venta: {ex.Message}");
+                _logger.LogError($"Error al obtener venta para imprimir: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
 
-        [HttpPost]
+        [HttpPost("venta")]
         public async Task<IActionResult> CreateFactura([FromBody] Venta venta)
         {
             _logger.LogInformation("Creando una nueva factura");

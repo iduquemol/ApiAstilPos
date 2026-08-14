@@ -249,20 +249,59 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_terceros", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+
+                        // Parámetro de Entrada
                         command.Parameters.AddWithValue("@terceros", requestBody ?? (object)DBNull.Value);
 
-                        // Ejecutar el SP
-                        var result = await command.ExecuteNonQueryAsync();
+                        // Parámetros de Salida (OUTPUT)
+                        var paramIdTercero = new SqlParameter("@idtercero", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output }; // -1 es nvarchar(max)
 
-                        _logger.LogInformation("Tercero creado correctamente.");
-                        return Ok(new { message = "Tercero creado correctamente", rowsAffected = result });
+                        command.Parameters.Add(paramIdTercero);
+                        command.Parameters.Add(paramError);
+                        command.Parameters.Add(paramMensaje);
+
+                        // Ejecutamos el Reader para consumir los SELECTs internos del SP
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                /* Consume los result sets para permitir el llenado de los parámetros OUTPUT */
+                            }
+                        }
+
+                        // Obtener valores de los parámetros OUTPUT
+                        long idTercero = paramIdTercero.Value != DBNull.Value ? Convert.ToInt64(paramIdTercero.Value) : 0;
+                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
+
+                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idTercero}, Error: {errorOutput}");
+
+                        // Si ocurrió un error en la lógica de negocio dentro del SP
+                        if (errorOutput)
+                        {
+                            return BadRequest(new
+                            {
+                                error = true,
+                                idTercero,
+                                mensaje = mensajeOutput
+                            });
+                        }
+
+                        return Ok(new
+                        {
+                            error = false,
+                            idTercero,
+                            mensaje = mensajeOutput
+                        });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al crear tercero: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
 
