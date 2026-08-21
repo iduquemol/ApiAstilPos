@@ -30,6 +30,9 @@ namespace ApiAstilPos
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            // Registrar HttpClientFactory
+            builder.Services.AddHttpClient();
+
             // Registrar EmailService
             builder.Services.AddSingleton<EmailService>();
             builder.Services.AddScoped<FacturaPdfService>();

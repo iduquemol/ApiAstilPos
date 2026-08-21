@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Text.Json;
+using System.Net.Http;
 
 namespace ApiAstilPos.Controllers
 {
@@ -14,11 +15,13 @@ namespace ApiAstilPos.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<ResolucionesController> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public ResolucionesController(IConfiguration configuration, ILogger<ResolucionesController> logger)
+        public ResolucionesController(IConfiguration configuration, ILogger<ResolucionesController> logger, IHttpClientFactory httpClientFactory)
         {
             _configuration = configuration;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
         }
 
         private string GetConnectionString()
@@ -58,6 +61,64 @@ namespace ApiAstilPos.Controllers
             {
                 _logger.LogError(ex, "Error al obtener resoluciones");
                 return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpPost("sincronizar-resoluciones-externas")]
+        public async Task<IActionResult> SincronizarResolucionesExternas()
+        {
+            _logger.LogInformation("Iniciando sincronización de resoluciones desde el proveedor externo");
+
+            try
+            {
+                var resolutionsUrl = _configuration["ApiExterna:ResolutionsUrl"];
+                var bearerToken = _configuration["ApiExterna:BearerToken"];
+
+                if (string.IsNullOrEmpty(resolutionsUrl))
+                {
+                    _logger.LogError("URL de consulta externa de resoluciones no configurada");
+                    return BadRequest("Configuración de API externa faltante");
+                }
+
+                using var httpClient = _httpClientFactory?.CreateClient() ?? new HttpClient();
+
+                httpClient.DefaultRequestHeaders.Clear();
+                if (!string.IsNullOrEmpty(bearerToken))
+                {
+                    httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
+                }
+
+                _logger.LogInformation($"Consultando proveedor externo en: {resolutionsUrl}");
+                var response = await httpClient.GetAsync(resolutionsUrl);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"Error en API externa de resoluciones: {response.StatusCode} - {responseContent}");
+                    return BadRequest("Error al consultar las resoluciones en el proveedor externo");
+                }
+
+                // Se envía el string JSON al Stored Procedure sp_Create_resolucionesFacturacion
+                // Se utiliza la conexión y el SP existente en este controlador para persistir los datos
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Create_resolucionesFacturacion", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@resolucionesFacturacion", responseContent ?? (object)DBNull.Value);
+
+                        var result = await command.ExecuteNonQueryAsync();
+                        _logger.LogInformation($"Stored procedure executed, rows affected: {result}");
+                    }
+                }
+
+                return Ok(new { message = "Resoluciones sincronizadas correctamente" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al sincronizar resoluciones externas: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
             }
         }
 
