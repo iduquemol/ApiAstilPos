@@ -321,13 +321,33 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Update_terceros", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+
+                        // 1. Parámetro de entrada con el JSON
                         command.Parameters.AddWithValue("@terceros", requestBody ?? (object)DBNull.Value);
 
-                        // Ejecutar el SP
-                        var result = await command.ExecuteNonQueryAsync();
+                        // 2. Parámetros OUTPUT requeridos por la firma del SP
+                        var pIdTercero = command.Parameters.Add("@idtercero", SqlDbType.BigInt);
+                        pIdTercero.Direction = ParameterDirection.Output;
 
-                        _logger.LogInformation("Tercero actualizado correctamente.");
-                        return Ok(new { message = "Tercero actualizado correctamente", rowsAffected = result });
+                        var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
+                        pErrorOutput.Direction = ParameterDirection.Output;
+
+                        var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1); // -1 equivale a NVARCHAR(MAX)
+                        pMensajeOutput.Direction = ParameterDirection.Output;
+
+                        // 3. Ejecutar
+                        await command.ExecuteNonQueryAsync();
+
+                        // 4. Leer resultados de salida
+                        bool hasError = pErrorOutput.Value != DBNull.Value && (bool)pErrorOutput.Value;
+                        string mensaje = pMensajeOutput.Value?.ToString() ?? "Operación completada";
+
+                        if (hasError)
+                        {
+                            return BadRequest(new { error = true, mensaje });
+                        }
+
+                        return Ok(new { message = mensaje, idTercero = pIdTercero.Value });
                     }
                 }
             }

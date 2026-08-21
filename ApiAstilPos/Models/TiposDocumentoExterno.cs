@@ -17,6 +17,10 @@ namespace ApiAstilPos.Models
         public string? NotaFe4Externo { get; set; }
         public string? NotaFe5Externo { get; set; }
 
+        public long? IdConsecutivo { get; set; }
+        public long? IdFormaPago { get; set; }
+        public bool? TipoDocumentoActivo { get; set; }
+
         public DateTime? FechaGrabacionDocumentoExterno { get; set; }
     }
 }
