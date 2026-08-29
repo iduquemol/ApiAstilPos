@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Text.Json;
 
@@ -52,7 +51,7 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener categorias");
+                _logger.LogError(ex, "Error al obtener categorías");
                 return StatusCode(500, "Error interno del servidor");
             }
         }
@@ -69,7 +68,13 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_categorias", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@categorias", requestBody);
+
+                        // Asignación explícita para evitar truncamientos en NVARCHAR(MAX)
+                        command.Parameters.Add(new SqlParameter("@categorias", SqlDbType.NVarChar, -1)
+                        {
+                            Value = requestBody
+                        });
+
                         await command.ExecuteNonQueryAsync();
                         return Ok(new { message = "Categoría creada correctamente." });
                     }
@@ -77,7 +82,8 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al crear categoría");
+                return BadRequest(ex.Message);
             }
         }
 
@@ -93,7 +99,13 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Update_categorias", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@categorias", requestBody);
+
+                        // Asignación explícita para evitar truncamientos en NVARCHAR(MAX)
+                        command.Parameters.Add(new SqlParameter("@categorias", SqlDbType.NVarChar, -1)
+                        {
+                            Value = requestBody
+                        });
+
                         await command.ExecuteNonQueryAsync();
                         return Ok(new { message = "Categoría actualizada correctamente." });
                     }
@@ -101,16 +113,28 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al actualizar categoría");
+                return BadRequest(ex.Message);
             }
         }
 
         [HttpDelete("categorias")]
-        public async Task<IActionResult> DeleteCategoria([FromBody] JObject request)
+        public async Task<IActionResult> DeleteCategoria([FromBody] JsonElement request)
         {
             try
             {
-                var idCategoria = request["idCategoria"]?.Value<long>() ?? 0;
+                long idCategoria = 0;
+
+                if (request.TryGetProperty("idCategoria", out JsonElement idElement))
+                {
+                    idCategoria = idElement.GetInt64();
+                }
+
+                if (idCategoria == 0)
+                {
+                    return BadRequest("El idCategoria enviado no es válido.");
+                }
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -125,7 +149,8 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error al eliminar categoría");
+                return BadRequest(ex.Message);
             }
         }
     }

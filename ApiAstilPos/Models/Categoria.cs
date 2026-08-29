@@ -6,9 +6,8 @@ namespace ApiAstilPos.Models
         public string? codigoCategoria { get; set; }
         public string? nombreCategoria { get; set; }
         public string? iconoCategoria { get; set; }
-        public long? idTarifaTributo { get; set; }
-        public string? nombreTarifa { get; set; }
-        public decimal? tarifa { get; set; }
+        public bool? categoriaActiva { get; set; } = false;
         public DateTime? fechaGrabacionCategoria { get; set; }
+        public List<TributosCategoria>? tributosCategoria { get; set; } = new List<TributosCategoria>();
     }
 }
