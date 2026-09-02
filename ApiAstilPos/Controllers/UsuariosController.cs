@@ -9,12 +9,12 @@ namespace ApiAstilPos.Controllers
 {
     [ApiController]
     [Route("api")]
-    public class VendedoresController : ControllerBase
+    public class UsuariosController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<VendedoresController> _logger;
+        private readonly ILogger<UsuariosController> _logger;
 
-        public VendedoresController(IConfiguration configuration, ILogger<VendedoresController> logger)
+        public UsuariosController(IConfiguration configuration, ILogger<UsuariosController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -25,18 +25,18 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet("vendedores")]
-        public async Task<IActionResult> GetVendedores()
+        [HttpGet("usuarios")]
+        public async Task<IActionResult> GetUsuarios()
         {
-            _logger.LogInformation("Obteniendo lista de vendedores");
+            _logger.LogInformation("Obteniendo lista de usuarios");
 
             try
             {
-                var vendedores = new List<Vendedor>();
+                var usuarios = new List<Usuario>();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Read_usuarios", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -44,75 +44,72 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonVendedores = reader.IsDBNull(reader.GetOrdinal("vendedores"))
+                                var jsonUsuarios = reader.IsDBNull(reader.GetOrdinal("usuarios"))
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("vendedores"));
+                                    : reader.GetString(reader.GetOrdinal("usuarios"));
 
-                                vendedores = JsonConvert.DeserializeObject<List<Vendedor>>(jsonVendedores);
+                                usuarios = JsonConvert.DeserializeObject<List<Usuario>>(jsonUsuarios);
                             }
                         }
                     }
                 }
 
-                return Ok(vendedores);
+                return Ok(usuarios);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener vendedores: {ex.Message}");
+                _logger.LogError($"Error al obtener usuarios: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
 
-        [HttpPost("vendedores")]
-        public async Task<IActionResult> CreateVendedor([FromBody] JsonElement vendedoresJson)
+        [HttpPost("usuarios")]
+        public async Task<IActionResult> CreateUsuario([FromBody] JsonElement usuariosJson)
         {
-            _logger.LogInformation("Creando un nuevo vendedor");
+            _logger.LogInformation("Creando un nuevo usuario");
 
             try
             {
-                string requestBody = vendedoresJson.GetRawText();
+                string requestBody = usuariosJson.GetRawText();
                 _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Create_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Create_usuarios", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        // Parámetro de Entrada JSON
-                        command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@usuarios", requestBody ?? (object)DBNull.Value);
 
-                        // Parámetros de Salida (OUTPUT)
-                        var paramIdVendedor = new SqlParameter("@idvendedor", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramIdUsuario = new SqlParameter("@idUsuario", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
                         var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        command.Parameters.Add(paramIdVendedor);
+                        command.Parameters.Add(paramIdUsuario);
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        // Consumir los result sets internos para que SQL Server llene los OUTPUT params
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                /* Loop de lectura para habilitar la hidratación de los parámetros OUTPUT */
+                                /* Loop para hidratar parámetros OUTPUT */
                             }
                         }
 
-                        long idVendedor = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
+                        long idUsuario = paramIdUsuario.Value != DBNull.Value ? Convert.ToInt64(paramIdUsuario.Value) : 0;
                         bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
                         string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
 
-                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idVendedor}, Error: {errorOutput}");
+                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idUsuario}, Error: {errorOutput}");
 
                         if (errorOutput)
                         {
                             return BadRequest(new
                             {
                                 error = true,
-                                idVendedor,
+                                idUsuario,
                                 mensaje = mensajeOutput
                             });
                         }
@@ -120,7 +117,7 @@ namespace ApiAstilPos.Controllers
                         return Ok(new
                         {
                             error = false,
-                            idVendedor,
+                            idUsuario,
                             mensaje = mensajeOutput
                         });
                     }
@@ -128,29 +125,29 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al crear vendedor: {ex.Message}");
+                _logger.LogError($"Error al crear usuario: {ex.Message}");
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
 
-        [HttpPut("vendedores")]
-        public async Task<IActionResult> UpdateVendedor([FromBody] JsonElement vendedoresJson)
+        [HttpPut("usuarios")]
+        public async Task<IActionResult> UpdateUsuario([FromBody] JsonElement usuariosJson)
         {
-            _logger.LogInformation("Actualizando un vendedor");
+            _logger.LogInformation("Actualizando un usuario");
 
             try
             {
-                string requestBody = vendedoresJson.GetRawText();
+                string requestBody = usuariosJson.GetRawText();
                 _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Update_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Update_usuarios", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@usuarios", requestBody ?? (object)DBNull.Value);
 
                         var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
                         pErrorOutput.Direction = ParameterDirection.Output;
@@ -158,16 +155,15 @@ namespace ApiAstilPos.Controllers
                         var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1);
                         pMensajeOutput.Direction = ParameterDirection.Output;
 
-                        long idVendedorEditado = 0;
+                        long idUsuarioEditado = 0;
 
-                        // Consumimos el SELECT final del SP
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                idVendedorEditado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
+                                idUsuarioEditado = reader.IsDBNull(reader.GetOrdinal("idUsuario"))
                                     ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
+                                    : reader.GetInt64(reader.GetOrdinal("idUsuario"));
                             }
                         }
 
@@ -179,66 +175,62 @@ namespace ApiAstilPos.Controllers
                             return BadRequest(new { error = true, mensaje });
                         }
 
-                        return Ok(new { message = mensaje, idVendedor = idVendedorEditado });
+                        return Ok(new { message = mensaje, idUsuario = idUsuarioEditado });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al actualizar vendedor: {ex.Message}");
+                _logger.LogError($"Error al actualizar usuario: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
 
-        [HttpDelete("vendedores/{id}")]
-        public async Task<IActionResult> DeleteVendedor(long id)
+        [HttpDelete("usuarios/{id}")]
+        public async Task<IActionResult> DeleteUsuario(long id)
         {
-            _logger.LogInformation($"Borrando vendedor con ID: {id}");
+            _logger.LogInformation($"Borrando usuario con ID: {id}");
 
             try
             {
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Delete_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Delete_usuarios", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        // 1. Parámetro de entrada
-                        command.Parameters.AddWithValue("@idVendedor", id);
+                        command.Parameters.AddWithValue("@idUsuario", id);
 
-                        // 2. Parámetros de salida (OUTPUT)
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
                         var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        long idVendedorBorrado = 0;
+                        long idUsuarioBorrado = 0;
 
-                        // 3. Consumir el SELECT final del SP para poblar los OUTPUTs y obtener los valores
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                idVendedorBorrado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
+                                idUsuarioBorrado = reader.IsDBNull(reader.GetOrdinal("idUsuario"))
                                     ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
+                                    : reader.GetInt64(reader.GetOrdinal("idUsuario"));
                             }
                         }
 
-                        // 4. Leer los resultados de los parámetros OUTPUT
                         bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
                         string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
 
-                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idVendedorBorrado}, Error: {errorOutput}");
+                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idUsuarioBorrado}, Error: {errorOutput}");
 
                         if (errorOutput)
                         {
                             return BadRequest(new
                             {
                                 error = true,
-                                idVendedor = idVendedorBorrado,
+                                idUsuario = idUsuarioBorrado,
                                 mensaje = mensajeOutput
                             });
                         }
@@ -246,7 +238,7 @@ namespace ApiAstilPos.Controllers
                         return Ok(new
                         {
                             error = false,
-                            idVendedorBorrado,
+                            idUsuarioBorrado,
                             mensaje = mensajeOutput
                         });
                     }
@@ -254,7 +246,7 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar vendedor: {ex.Message}");
+                _logger.LogError($"Error al borrar usuario: {ex.Message}");
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }

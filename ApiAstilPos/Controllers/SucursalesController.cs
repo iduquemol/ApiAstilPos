@@ -9,12 +9,12 @@ namespace ApiAstilPos.Controllers
 {
     [ApiController]
     [Route("api")]
-    public class VendedoresController : ControllerBase
+    public class SucursalesController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<VendedoresController> _logger;
+        private readonly ILogger<SucursalesController> _logger;
 
-        public VendedoresController(IConfiguration configuration, ILogger<VendedoresController> logger)
+        public SucursalesController(IConfiguration configuration, ILogger<SucursalesController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -25,18 +25,18 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet("vendedores")]
-        public async Task<IActionResult> GetVendedores()
+        [HttpGet("sucursales")]
+        public async Task<IActionResult> GetSucursales()
         {
-            _logger.LogInformation("Obteniendo lista de vendedores");
+            _logger.LogInformation("Obteniendo lista de sucursales");
 
             try
             {
-                var vendedores = new List<Vendedor>();
+                var sucursales = new List<Sucursal>();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Read_sucursales", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -44,51 +44,51 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonVendedores = reader.IsDBNull(reader.GetOrdinal("vendedores"))
+                                var jsonSucursales = reader.IsDBNull(reader.GetOrdinal("sucursales"))
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("vendedores"));
+                                    : reader.GetString(reader.GetOrdinal("sucursales"));
 
-                                vendedores = JsonConvert.DeserializeObject<List<Vendedor>>(jsonVendedores);
+                                sucursales = JsonConvert.DeserializeObject<List<Sucursal>>(jsonSucursales);
                             }
                         }
                     }
                 }
 
-                return Ok(vendedores);
+                return Ok(sucursales);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener vendedores: {ex.Message}");
+                _logger.LogError($"Error al obtener sucursales: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
 
-        [HttpPost("vendedores")]
-        public async Task<IActionResult> CreateVendedor([FromBody] JsonElement vendedoresJson)
+        [HttpPost("sucursales")]
+        public async Task<IActionResult> CreateSucursal([FromBody] JsonElement sucursalesJson)
         {
-            _logger.LogInformation("Creando un nuevo vendedor");
+            _logger.LogInformation("Creando una nueva sucursal");
 
             try
             {
-                string requestBody = vendedoresJson.GetRawText();
+                string requestBody = sucursalesJson.GetRawText();
                 _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Create_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Create_sucursales", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         // Parámetro de Entrada JSON
-                        command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@sucursales", requestBody ?? (object)DBNull.Value);
 
                         // Parámetros de Salida (OUTPUT)
-                        var paramIdVendedor = new SqlParameter("@idvendedor", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramIdSucursal = new SqlParameter("@idsucursal", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
                         var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        command.Parameters.Add(paramIdVendedor);
+                        command.Parameters.Add(paramIdSucursal);
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
@@ -101,18 +101,18 @@ namespace ApiAstilPos.Controllers
                             }
                         }
 
-                        long idVendedor = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
+                        long idSucursal = paramIdSucursal.Value != DBNull.Value ? Convert.ToInt64(paramIdSucursal.Value) : 0;
                         bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
                         string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
 
-                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idVendedor}, Error: {errorOutput}");
+                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idSucursal}, Error: {errorOutput}");
 
                         if (errorOutput)
                         {
                             return BadRequest(new
                             {
                                 error = true,
-                                idVendedor,
+                                idSucursal,
                                 mensaje = mensajeOutput
                             });
                         }
@@ -120,7 +120,7 @@ namespace ApiAstilPos.Controllers
                         return Ok(new
                         {
                             error = false,
-                            idVendedor,
+                            idSucursal,
                             mensaje = mensajeOutput
                         });
                     }
@@ -128,29 +128,30 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al crear vendedor: {ex.Message}");
+                _logger.LogError($"Error al crear sucursal: {ex.Message}");
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
 
-        [HttpPut("vendedores")]
-        public async Task<IActionResult> UpdateVendedor([FromBody] JsonElement vendedoresJson)
+        [HttpPut("sucursales")]
+        public async Task<IActionResult> UpdateSucursal([FromBody] JsonElement sucursalesJson)
         {
-            _logger.LogInformation("Actualizando un vendedor");
+            _logger.LogInformation("Actualizando una sucursal");
 
             try
             {
-                string requestBody = vendedoresJson.GetRawText();
+                string requestBody = sucursalesJson.GetRawText();
                 _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Update_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Update_sucursales", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
+                        // Solo enviamos los 3 parámetros que define el SP:
+                        command.Parameters.AddWithValue("@sucursales", requestBody ?? (object)DBNull.Value);
 
                         var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
                         pErrorOutput.Direction = ParameterDirection.Output;
@@ -158,16 +159,16 @@ namespace ApiAstilPos.Controllers
                         var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1);
                         pMensajeOutput.Direction = ParameterDirection.Output;
 
-                        long idVendedorEditado = 0;
+                        long idSucursalEditada = 0;
 
                         // Consumimos el SELECT final del SP
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                idVendedorEditado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
+                                idSucursalEditada = reader.IsDBNull(reader.GetOrdinal("idSucursal"))
                                     ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
+                                    : reader.GetInt64(reader.GetOrdinal("idSucursal"));
                             }
                         }
 
@@ -179,33 +180,33 @@ namespace ApiAstilPos.Controllers
                             return BadRequest(new { error = true, mensaje });
                         }
 
-                        return Ok(new { message = mensaje, idVendedor = idVendedorEditado });
+                        return Ok(new { message = mensaje, idSucursal = idSucursalEditada });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al actualizar vendedor: {ex.Message}");
+                _logger.LogError($"Error al actualizar sucursal: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
 
-        [HttpDelete("vendedores/{id}")]
-        public async Task<IActionResult> DeleteVendedor(long id)
+        [HttpDelete("sucursales/{id}")]
+        public async Task<IActionResult> DeleteSucursal(long id)
         {
-            _logger.LogInformation($"Borrando vendedor con ID: {id}");
+            _logger.LogInformation($"Borrando sucursal con ID: {id}");
 
             try
             {
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Delete_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Delete_sucursales", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         // 1. Parámetro de entrada
-                        command.Parameters.AddWithValue("@idVendedor", id);
+                        command.Parameters.AddWithValue("@idSucursal", id);
 
                         // 2. Parámetros de salida (OUTPUT)
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
@@ -214,16 +215,16 @@ namespace ApiAstilPos.Controllers
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        long idVendedorBorrado = 0;
+                        long idSucursalBorrada = 0;
 
                         // 3. Consumir el SELECT final del SP para poblar los OUTPUTs y obtener los valores
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                idVendedorBorrado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
+                                idSucursalBorrada = reader.IsDBNull(reader.GetOrdinal("idSucursal"))
                                     ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
+                                    : reader.GetInt64(reader.GetOrdinal("idSucursal"));
                             }
                         }
 
@@ -231,14 +232,14 @@ namespace ApiAstilPos.Controllers
                         bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
                         string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
 
-                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idVendedorBorrado}, Error: {errorOutput}");
+                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idSucursalBorrada}, Error: {errorOutput}");
 
                         if (errorOutput)
                         {
                             return BadRequest(new
                             {
                                 error = true,
-                                idVendedor = idVendedorBorrado,
+                                idSucursal = idSucursalBorrada,
                                 mensaje = mensajeOutput
                             });
                         }
@@ -246,7 +247,7 @@ namespace ApiAstilPos.Controllers
                         return Ok(new
                         {
                             error = false,
-                            idVendedorBorrado,
+                            idSucursalBorrada,
                             mensaje = mensajeOutput
                         });
                     }
@@ -254,7 +255,7 @@ namespace ApiAstilPos.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar vendedor: {ex.Message}");
+                _logger.LogError($"Error al borrar sucursal: {ex.Message}");
                 return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
