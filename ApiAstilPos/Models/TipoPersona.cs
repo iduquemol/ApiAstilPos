@@ -8,5 +8,7 @@ namespace ApiAstilPos.Models
         public short IdTipoPersona { get; set; }
         public string? CodigoTipoPersona { get; set; }
         public string? NombreTipoPersona { get; set; }
+        public string? IdTipoPersonaExt { get; set; }
+        public DateTime? FechaGrabacionTipoPersona { get; set; }
     }
 }

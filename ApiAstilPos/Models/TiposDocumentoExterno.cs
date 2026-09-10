@@ -10,7 +10,6 @@ namespace ApiAstilPos.Models
         public string NombreTipoDocumentoExterno { get; set; } = string.Empty;
         public long IdTipoDocumento { get; set; }
 
-        // Campos opcionales (Nullables)
         public string? NotaFe1Externo { get; set; }
         public string? NotaFe2Externo { get; set; }
         public string? NotaFe3Externo { get; set; }
@@ -20,6 +19,9 @@ namespace ApiAstilPos.Models
         public long? IdConsecutivo { get; set; }
         public long? IdFormaPago { get; set; }
         public bool? TipoDocumentoActivo { get; set; }
+
+        public long? IdTipoAsignacionConsecutivo { get; set; }
+        public string? NombreTipoAsignacion { get; set; }
 
         public DateTime? FechaGrabacionDocumentoExterno { get; set; }
     }
