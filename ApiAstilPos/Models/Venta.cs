@@ -7,6 +7,7 @@ namespace ApiAstilPos.Models
     {
         public long IdVenta { get; set; }
         public long IdTipoDocumento { get; set; }
+        public long? IdTipoDocumentoExterno { get; set; }
         public string? NombreDocumento { get; set; }
         public long IdFormaPago { get; set; }
         public long IdMetodoDian { get; set; }

@@ -7,13 +7,13 @@ using Microsoft.Data.SqlClient;
 namespace ApiAstilPos.Controllers
 {
     [ApiController]
-    [Route("api/tiposproducto")]
-    public class TipoProductoController : ControllerBase
+    [Route("api")]
+    public class MediosPagoDianController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<TipoProductoController> _logger;
+        private readonly ILogger<MediosPagoDianController> _logger;
 
-        public TipoProductoController(IConfiguration configuration, ILogger<TipoProductoController> logger)
+        public MediosPagoDianController(IConfiguration configuration, ILogger<MediosPagoDianController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -24,18 +24,18 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetTiposProducto()
+        [HttpGet("mediospagodian")]
+        public async Task<IActionResult> GetMediosPagoDian()
         {
-            _logger.LogInformation("Obteniendo lista de tipos de producto");
+            _logger.LogInformation("Obteniendo lista de medios de pago DIAN");
 
             try
             {
-                var tiposProducto = new List<TipoProducto>();
+                var listaMediosDian = new List<MedioPagoDian>();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tiposProductosId", connection))
+                    using (var command = new SqlCommand("sp_Read_mediosPagoDianId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -43,24 +43,23 @@ namespace ApiAstilPos.Controllers
                         {
                             if (await reader.ReadAsync())
                             {
-                                var ordinal = reader.GetOrdinal("tiposProductos");
-                                var jsonTiposProducto = reader.IsDBNull(ordinal)
+                                var ordinal = reader.GetOrdinal("mediosPagoDian");
+                                var jsonMediosDian = reader.IsDBNull(ordinal)
                                     ? "[]"
                                     : reader.GetString(ordinal);
 
-                                tiposProducto = JsonConvert.DeserializeObject<List<TipoProducto>>(jsonTiposProducto)
-                                                ?? new List<TipoProducto>();
+                                listaMediosDian = JsonConvert.DeserializeObject<List<MedioPagoDian>>(jsonMediosDian)
+                                                  ?? new List<MedioPagoDian>();
                             }
                         }
                     }
                 }
 
-                _logger.LogInformation($"Tipos de producto obtenidos: {tiposProducto.Count}");
-                return Ok(tiposProducto);
+                return Ok(listaMediosDian);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener tipos de producto: {ex.Message}");
+                _logger.LogError($"Error al obtener medios de pago DIAN: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }

@@ -25,7 +25,7 @@ namespace ApiAstilPos.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTiposPersona()
+        public async Task<IActionResult> GetTiposPersona([FromQuery] short? idTipoPersona = null)
         {
             _logger.LogInformation("Obteniendo lista de tipos de persona");
 
@@ -36,9 +36,12 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tiposPersona", connection))
+                    using (var command = new SqlCommand("sp_Read_tiposPersonaId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+
+                        // Se envía el parámetro opcional al Stored Procedure
+                        command.Parameters.AddWithValue("@idTipoPersona", (object)idTipoPersona ?? DBNull.Value);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -49,7 +52,6 @@ namespace ApiAstilPos.Controllers
                                 {
                                     string jsonResult = reader.GetString(ordinal);
 
-                                    // Opciones para ignorar mayúsculas/minúsculas al mapear propiedades JSON
                                     var options = new JsonSerializerOptions
                                     {
                                         PropertyNameCaseInsensitive = true

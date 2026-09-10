@@ -4,8 +4,9 @@ using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
-using System.Text.Json;
 using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 
 namespace ApiAstilPos.Controllers
 {
@@ -34,33 +35,44 @@ namespace ApiAstilPos.Controllers
         {
             try
             {
-                var resoluciones = new List<resoluciones>();
+                string jsonResult = string.Empty;
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_resolucionesFacturacion", connection))
+                    using (var command = new SqlCommand("sp_Read_resolucionesFacturacionId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                var jsonResoluciones = reader.IsDBNull(reader.GetOrdinal("resoluciones"))
-                                    ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("resoluciones"));
-
-                                resoluciones = JsonConvert.DeserializeObject<List<resoluciones>>(jsonResoluciones)
-                                               ?? new List<resoluciones>();
+                                var ordinal = reader.GetOrdinal("resolucionesFacturacion");
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonResult = reader.GetString(ordinal);
+                                }
                             }
                         }
                     }
                 }
+
+                // Si la tabla está vacía o el SP devuelve nulo/vacío
+                if (string.IsNullOrWhiteSpace(jsonResult) || jsonResult.Trim().Equals("null", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Ok(new List<resoluciones>());
+                }
+
+                var resoluciones = JsonConvert.DeserializeObject<List<resoluciones>>(jsonResult)
+                                   ?? new List<resoluciones>();
+
                 return Ok(resoluciones);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al obtener resoluciones");
-                return StatusCode(500, "Internal server error");
+                // Registrar la excepción exacta para depuración
+                _logger.LogError(ex, "Error al obtener resoluciones: {Message}", ex.Message);
+                return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
 
@@ -98,22 +110,55 @@ namespace ApiAstilPos.Controllers
                     return BadRequest("Error al consultar las resoluciones en el proveedor externo");
                 }
 
-                // Se envía el string JSON al Stored Procedure sp_Create_resolucionesFacturacion
-                // Se utiliza la conexión y el SP existente en este controlador para persistir los datos
+                // Ejecución del Stored Procedure sp_Update_resolucionesFacturacionDian con parámetros OUTPUT
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Create_resolucionesFacturacion", connection))
+                    using (var command = new SqlCommand("sp_Update_resolucionesFacturacionDian", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@resolucionesFacturacion", responseContent ?? (object)DBNull.Value);
 
-                        var result = await command.ExecuteNonQueryAsync();
-                        _logger.LogInformation($"Stored procedure executed, rows affected: {result}");
+                        // Parámetro de entrada con el JSON de la DIAN
+                        command.Parameters.AddWithValue("@resolucionesDian", responseContent ?? (object)DBNull.Value);
+
+                        // Parámetros de salida indicados por la base de datos
+                        var errorParam = new SqlParameter("@errorOutput", SqlDbType.Bit)
+                        {
+                            Direction = ParameterDirection.Output
+                        };
+                        var mensajeParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) // -1 equivale a max
+                        {
+                            Direction = ParameterDirection.Output
+                        };
+
+                        command.Parameters.Add(errorParam);
+                        command.Parameters.Add(mensajeParam);
+
+                        await command.ExecuteNonQueryAsync();
+
+                        // Lectura de los valores que devuelve la BD
+                        bool isError = errorParam.Value != DBNull.Value && Convert.ToBoolean(errorParam.Value);
+                        string mensajeBd = mensajeParam.Value != DBNull.Value ? mensajeParam.Value.ToString() : string.Empty;
+
+                        if (isError)
+                        {
+                            _logger.LogError($"Error en el procedimiento almacenado: {mensajeBd}");
+                            return BadRequest($"Error en base de datos: {mensajeBd}");
+                        }
+
+                        _logger.LogInformation($"SP ejecutado correctamente. Mensaje BD: {mensajeBd}");
                     }
                 }
 
-                return Ok(new { message = "Resoluciones sincronizadas correctamente" });
+                if (string.IsNullOrWhiteSpace(responseContent))
+                {
+                    return Ok(new object[] { });
+                }
+
+                // Deserializar el JSON obtenido para devolver la estructura real al frontend
+                var jsonResponse = System.Text.Json.JsonSerializer.Deserialize<object>(responseContent);
+
+                return Ok(jsonResponse);
             }
             catch (Exception ex)
             {
@@ -168,7 +213,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Update_resolucionesFacturacion", connection))
+                    using (var command = new SqlCommand("sp_Update_resolucionesFacturacionDian", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@resolucionesFacturacion", requestBody ?? (object)DBNull.Value);

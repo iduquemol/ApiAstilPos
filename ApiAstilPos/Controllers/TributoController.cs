@@ -35,32 +35,27 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tributos", connection))
+                    using (var command = new SqlCommand("sp_Read_tributosId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                tributos.Add(new Tributo
-                                {
-                                    IdTributo = reader.GetInt64(reader.GetOrdinal("idTributo")),
-                                    CodigoTributo = reader.IsDBNull(reader.GetOrdinal("codigoTributo"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("codigoTributo")),
-                                    NombreTributo = reader.IsDBNull(reader.GetOrdinal("nombreTributo"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("nombreTributo")),
-                                    DescripcionTributo = reader.IsDBNull(reader.GetOrdinal("descripcionTributo"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("descripcionTributo")),
-                                });
+                                var ordinal = reader.GetOrdinal("tributos");
+                                var jsonTributos = reader.IsDBNull(ordinal)
+                                    ? "[]"
+                                    : reader.GetString(ordinal);
+
+                                tributos = JsonConvert.DeserializeObject<List<Tributo>>(jsonTributos)
+                                           ?? new List<Tributo>();
                             }
                         }
                     }
                 }
 
+                _logger.LogInformation($"Tributos obtenidos: {tributos.Count}");
                 return Ok(tributos);
             }
             catch (Exception ex)
@@ -77,28 +72,32 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var tributos = new List<TributoTarifa>();
-                using var connection = new SqlConnection(GetConnectionString());
+                var tributosTarifas = new List<TributoTarifa>();
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_TarifasTributo", connection))
+                    using (var command = new SqlCommand("sp_Read_tarifaTributoId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                var jsonTarifasTributo = reader.IsDBNull(reader.GetOrdinal("tarifasTributo"))
+                                var ordinal = reader.GetOrdinal("tarifaTributo");
+                                var jsonTarifasTributo = reader.IsDBNull(ordinal)
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("tarifasTributo"));
-                                tributos = JsonConvert.DeserializeObject<List<TributoTarifa>>(jsonTarifasTributo);
+                                    : reader.GetString(ordinal);
+
+                                tributosTarifas = JsonConvert.DeserializeObject<List<TributoTarifa>>(jsonTarifasTributo)
+                                                  ?? new List<TributoTarifa>();
                             }
                         }
                     }
                 }
-                _logger.LogInformation($"Tarifas Tributo obtenidos: {tributos.Count}");
-                return Ok(tributos);
+
+                _logger.LogInformation($"Tarifas Tributo obtenidas: {tributosTarifas.Count}");
+                return Ok(tributosTarifas);
             }
             catch (Exception ex)
             {

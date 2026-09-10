@@ -7,13 +7,13 @@ using System.Text.Json;
 namespace ApiAstilPos.Controllers
 {
     [ApiController]
-    [Route("api/tiposregimen")]
-    public class TiposRegimenController : ControllerBase
+    [Route("api/monedas")]
+    public class MonedasController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<TiposRegimenController> _logger;
+        private readonly ILogger<MonedasController> _logger;
 
-        public TiposRegimenController(IConfiguration configuration, ILogger<TiposRegimenController> logger)
+        public MonedasController(IConfiguration configuration, ILogger<MonedasController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -25,28 +25,29 @@ namespace ApiAstilPos.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTiposRegimen([FromQuery] long? idTipoRegimen = null)
+        public async Task<IActionResult> GetMonedas([FromQuery] long? idMoneda = null)
         {
-            _logger.LogInformation("Obteniendo lista de tipos de régimen");
+            _logger.LogInformation("Obteniendo lista de monedas");
 
             try
             {
-                var tiposRegimen = new List<TipoRegimen>();
+                var monedas = new List<Moneda>();
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tiposRegimenId", connection))
+                    using (var command = new SqlCommand("sp_Read_monedasId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@idTipoRegimen", (object)idTipoRegimen ?? DBNull.Value);
+                        // Se pasa el parámetro idMoneda al Stored Procedure
+                        command.Parameters.AddWithValue("@idMoneda", (object)idMoneda ?? DBNull.Value);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             if (await reader.ReadAsync())
                             {
-                                int ordinal = reader.GetOrdinal("tiposRegimen");
+                                int ordinal = reader.GetOrdinal("monedas");
                                 if (!reader.IsDBNull(ordinal))
                                 {
                                     string jsonResult = reader.GetString(ordinal);
@@ -56,18 +57,18 @@ namespace ApiAstilPos.Controllers
                                         PropertyNameCaseInsensitive = true
                                     };
 
-                                    tiposRegimen = JsonSerializer.Deserialize<List<TipoRegimen>>(jsonResult, options) ?? new List<TipoRegimen>();
+                                    monedas = JsonSerializer.Deserialize<List<Moneda>>(jsonResult, options) ?? new List<Moneda>();
                                 }
                             }
                         }
                     }
                 }
 
-                return Ok(tiposRegimen);
+                return Ok(monedas);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener los tipos de régimen: {ex.Message}");
+                _logger.LogError($"Error al obtener las monedas: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }

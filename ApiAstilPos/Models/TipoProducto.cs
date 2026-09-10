@@ -8,9 +8,9 @@ namespace ApiAstilPos.Models
 {
     public class TipoProducto
     {
-        public short IdTipoProducto { get; set; }
+        public long IdTipoProducto { get; set; }
         public string? CodigoTipoProducto { get; set; }
         public string? NombreTipoProducto { get; set; }
-        public bool ManejaInventario { get; set; }
+        public bool? ManejaInventario { get; set; }
     }
 }

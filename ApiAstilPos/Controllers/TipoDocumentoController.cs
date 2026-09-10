@@ -32,21 +32,24 @@ namespace ApiAstilPos.Controllers
             try
             {
                 var tiposDocumento = new List<TipoDocumento>();
-                using var connection = new SqlConnection(GetConnectionString());
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tiposDocumento", connection))
+                    using (var command = new SqlCommand("sp_Read_tiposDocumentoId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                var jsonTiposDocumento = reader.IsDBNull(reader.GetOrdinal("tiposDocumento"))
+                                var ordinal = reader.GetOrdinal("tiposDocumento");
+                                var jsonTiposDocumento = reader.IsDBNull(ordinal)
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("tiposDocumento"));
-                                tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonTiposDocumento);
+                                    : reader.GetString(ordinal);
+
+                                tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonTiposDocumento)
+                                                 ?? new List<TipoDocumento>();
                             }
                         }
                     }
