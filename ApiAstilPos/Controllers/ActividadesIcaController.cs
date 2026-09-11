@@ -4,6 +4,7 @@ using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Text.Json;
+using System.Text;
 
 namespace ApiAstilPos.Controllers
 {
@@ -32,7 +33,8 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var actividades = new List<ActividadesIca>();
+                var jsonBuilder = new StringBuilder();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -42,22 +44,30 @@ namespace ApiAstilPos.Controllers
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
+                            int ordinal = reader.GetOrdinal("actividadesIca");
+
                             while (await reader.ReadAsync())
                             {
-                                var jsonActividades = reader.IsDBNull(reader.GetOrdinal("actividadesIca"))
-                                    ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("actividadesIca"));
-
-                                // CORRECCIÓN: Acumular/concatenar en lugar de reasignar
-                                var listaTemporal = JsonConvert.DeserializeObject<List<ActividadesIca>>(jsonActividades);
-                                if (listaTemporal != null)
+                                if (!reader.IsDBNull(ordinal))
                                 {
-                                    actividades.AddRange(listaTemporal);
+                                    jsonBuilder.Append(reader.GetString(ordinal));
                                 }
                             }
                         }
                     }
                 }
+
+                string jsonCompleto = jsonBuilder.ToString();
+
+                // Si el Stored Procedure no devolvió nada, inicializamos como arreglo vacío
+                if (string.IsNullOrWhiteSpace(jsonCompleto))
+                {
+                    jsonCompleto = "[]";
+                }
+
+                // Deserialización única al finalizar la lectura de la base de datos
+                var actividades = JsonConvert.DeserializeObject<List<ActividadesIca>>(jsonCompleto) ?? new List<ActividadesIca>();
+
                 _logger.LogInformation($"Actividades ICA obtenidas: {actividades.Count}");
                 return Ok(actividades);
             }
@@ -188,15 +198,14 @@ namespace ApiAstilPos.Controllers
             }
         }
 
-        [HttpDelete("actividadesIca")]
-        public async Task<IActionResult> DeleteActividadIca([FromBody] JsonElement actividadesIcaJson)
+        [HttpDelete("actividadesIca/{id}")]
+        public async Task<IActionResult> DeleteActividadIca(long id)
         {
-            _logger.LogInformation("Intentando eliminar la actividad ICA");
+            _logger.LogInformation($"Intentando eliminar la actividad ICA con ID: {id}");
 
             try
             {
-                string requestBody = actividadesIcaJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
+                string requestBody = JsonConvert.SerializeObject(new { idActividadIca = id });
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -205,7 +214,7 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@actividadesIca", requestBody ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@actividadesIca", requestBody);
 
                         var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt)
                         {
@@ -228,16 +237,41 @@ namespace ApiAstilPos.Controllers
 
                         long idRetornado = idActividadIcaParam.Value != DBNull.Value ? (long)idActividadIcaParam.Value : 0;
                         bool tieneError = errorOutputParam.Value != DBNull.Value && (bool)errorOutputParam.Value;
-                        string mensaje = mensajeOutputParam.Value != DBNull.Value ? mensajeOutputParam.Value.ToString() : string.Empty;
+                        string mensajeRaw = mensajeOutputParam.Value != DBNull.Value ? mensajeOutputParam.Value.ToString() : string.Empty;
+
+                        // Extraemos el texto del JSON que retorna el SP en @mensajeOutput
+                        string mensajeTexto = "Actividad ICA eliminada correctamente";
+                        if (!string.IsNullOrWhiteSpace(mensajeRaw))
+                        {
+                            try
+                            {
+                                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
+                                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
+                                {
+                                    mensajeTexto = listaMensajes[0]["mensaje"]?.ToString() ?? mensajeTexto;
+                                }
+                            }
+                            catch
+                            {
+                                mensajeTexto = mensajeRaw;
+                            }
+                        }
 
                         if (tieneError || idRetornado == 0)
                         {
-                            _logger.LogWarning($"Error al eliminar actividad ICA: {mensaje}");
-                            return BadRequest(string.IsNullOrEmpty(mensaje) ? "No se pudo eliminar la actividad ICA." : mensaje);
+                            _logger.LogWarning($"Error al eliminar actividad ICA: {mensajeTexto}");
+                            return BadRequest(mensajeTexto);
                         }
 
                         _logger.LogInformation($"Actividad ICA con ID {idRetornado} eliminada exitosamente.");
-                        return Ok(new { message = "Actividad ICA eliminada correctamente", idActividadIca = idRetornado });
+
+                        // Retornamos ambas claves para compatibilidad absoluta con cualquier interfaz del frontend
+                        return Ok(new
+                        {
+                            message = mensajeTexto,
+                            mensaje = mensajeTexto,
+                            idActividadIca = idRetornado
+                        });
                     }
                 }
             }
