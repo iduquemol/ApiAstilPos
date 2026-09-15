@@ -36,7 +36,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_sucursales", connection))
+                    using (var command = new SqlCommand("sp_Read_sucursalesId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 

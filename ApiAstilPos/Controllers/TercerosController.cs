@@ -61,7 +61,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_terceros", connection))
+                    using (var command = new SqlCommand("sp_Read_tercerosId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -98,7 +98,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_tercerosProveedores", connection))
+                    using (var command = new SqlCommand("sp_Read_ProveedoresId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -106,9 +106,9 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonTercerosProveedores = reader.IsDBNull(reader.GetOrdinal("proveedores"))
+                                var jsonTercerosProveedores = reader.IsDBNull(reader.GetOrdinal("terceros"))
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("proveedores"));
+                                    : reader.GetString(reader.GetOrdinal("terceros"));
                                 tercerosProveedores = JsonConvert.DeserializeObject<List<TerceroProveedor>>(jsonTercerosProveedores);
                             }
                         }
