@@ -7,21 +7,21 @@ namespace ApiAstilPos.Models
     {
         public long IdTercero { get; set; }
         public short IdTipoDocumentoId { get; set; }
-        public string DigitoVerificacion { get; set; }
+        public string? DigitoVerificacion { get; set; }
         public string NumeroIdentificacion { get; set; }
-        public string PrimerNombre { get; set; }
+        public string? PrimerNombre { get; set; }
         public string? SegundoNombre { get; set; }
-        public string PrimerApellido { get; set; }
+        public string? PrimerApellido { get; set; }
         public string? SegundoApellido { get; set; }
-        public string RazonSocial { get; set; }
-        public string? TelefonoTercero { get; set; }
+        public string? RazonSocial { get; set; }
+        public string TelefonoTercero { get; set; }
         public string DireccionTercero { get; set; }
         public long IdMunicipio { get; set; }
         public string NombreMunicipio { get; set; }
         public string EmailTercero { get; set; }
-        public long? IdTipoPersona { get; set; }
+        public long IdTipoPersona { get; set; }
         public string NombreTipoPersona { get; set; }
-        public long? IdDepartamento { get; set; }
+        public long IdDepartamento { get; set; }
         public string NombreDepartamento { get; set; }
         public bool? TerceroActivo { get; set; }
         public bool? TerceroCliente { get; set; }
@@ -29,7 +29,7 @@ namespace ApiAstilPos.Models
         public bool? TercerosEmpleado { get; set; }
         public bool? TerceroGeneral { get; set; }
         public long? IdTipoRegimen { get; set; }
-        public string NombreTipoRegimen { get; set; }
+        public string? NombreTipoRegimen { get; set; }
         public long? IdListaPreciosTercero { get; set; }
 
         // Mapeo de retenciones/tributos (igual que en ITercero.ts)

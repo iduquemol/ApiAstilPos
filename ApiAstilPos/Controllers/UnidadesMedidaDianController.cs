@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -10,12 +9,12 @@ namespace ApiAstilPos.Controllers
 {
     [ApiController]
     [Route("api")]
-    public class mediosPagoController : ControllerBase
+    public class UnidadesMedidaDianController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger<mediosPagoController> _logger;
+        private readonly ILogger<UnidadesMedidaDianController> _logger;
 
-        public mediosPagoController(IConfiguration configuration, ILogger<mediosPagoController> logger)
+        public UnidadesMedidaDianController(IConfiguration configuration, ILogger<UnidadesMedidaDianController> logger)
         {
             _configuration = configuration;
             _logger = logger;
@@ -26,18 +25,18 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
-        [HttpGet("mediosPago")]
-        public async Task<IActionResult> GetmediosPago()
+        [HttpGet("unidadesmedidadian")]
+        public async Task<IActionResult> GetUnidadesMedidaDian()
         {
-            _logger.LogInformation("Obteniendo lista de Medios de Pago");
+            _logger.LogInformation("Obteniendo lista de unidades de medida Dian");
 
             try
             {
-                var mediosPago = new List<mediosPago>();
+                var unidadesMedidaDian = new List<UnidadesMedidaDian>();
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_mediosPagoId", connection))
+                    using (var command = new SqlCommand("sp_Read_unidadesMedidaDianId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
@@ -45,20 +44,21 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonmediosPago = reader.IsDBNull(reader.GetOrdinal("mediosPago"))
+                                var jsonUnidadesMedidaDian = reader.IsDBNull(reader.GetOrdinal("unidadesmedidadian"))
                                     ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("mediosPago"));
-                                mediosPago = JsonConvert.DeserializeObject<List<mediosPago>>(jsonmediosPago);
+                                    : reader.GetString(reader.GetOrdinal("unidadesmedidadian"));
+
+                                unidadesMedidaDian = JsonConvert.DeserializeObject<List<UnidadesMedidaDian>>(jsonUnidadesMedidaDian);
                             }
                         }
                     }
                 }
 
-                return Ok(mediosPago);
+                return Ok(unidadesMedidaDian);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener Medios de Pago: {ex.Message}");
+                _logger.LogError($"Error al obtener unidades de medida Dian: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
