@@ -4,6 +4,7 @@ using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Text.Json;
+using System.Text;
 
 namespace ApiAstilPos.Controllers
 {
@@ -22,7 +23,31 @@ namespace ApiAstilPos.Controllers
 
         private string GetConnectionString()
         {
-            return _configuration.GetConnectionString("SqlConnectionString");
+            return _configuration.GetConnectionString("SqlConnectionString") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Método auxiliar para extraer el mensaje formateado desde el output del Stored Procedure.
+        /// </summary>
+        private string ExtraerMensajeDb(string mensajeRaw, string mensajePorDefecto)
+        {
+            if (string.IsNullOrWhiteSpace(mensajeRaw))
+                return mensajePorDefecto;
+
+            try
+            {
+                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
+                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
+                {
+                    return listaMensajes[0]["mensaje"]?.ToString() ?? mensajePorDefecto;
+                }
+            }
+            catch
+            {
+                return mensajeRaw;
+            }
+
+            return mensajePorDefecto;
         }
 
         [HttpGet("tiposdocumentoexterno")]
@@ -32,7 +57,8 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var tiposDocumento = new List<TipoDocumentoExterno>();
+                var jsonBuilder = new StringBuilder();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -42,26 +68,35 @@ namespace ApiAstilPos.Controllers
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            if (await reader.ReadAsync())
-                            {
-                                var ordinal = reader.GetOrdinal("tiposDocumentoExterno");
-                                var jsonTiposDoc = reader.IsDBNull(ordinal)
-                                    ? "[]"
-                                    : reader.GetString(ordinal);
+                            int ordinal = reader.GetOrdinal("tiposDocumentoExterno");
 
-                                tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumentoExterno>>(jsonTiposDoc)
-                                                 ?? new List<TipoDocumentoExterno>();
+                            while (await reader.ReadAsync())
+                            {
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonBuilder.Append(reader.GetString(ordinal));
+                                }
                             }
                         }
                     }
                 }
 
+                string jsonCompleto = jsonBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(jsonCompleto))
+                {
+                    jsonCompleto = "[]";
+                }
+
+                var tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumentoExterno>>(jsonCompleto) ?? new List<TipoDocumentoExterno>();
+
+                _logger.LogInformation($"Tipos de documento externo obtenidos: {tiposDocumento.Count}");
                 return Ok(tiposDocumento);
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al obtener tipos de documento externo: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idTipoDocumentoExterno = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -82,34 +117,35 @@ namespace ApiAstilPos.Controllers
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@tiposDocumentoExterno", requestBody ?? (object)DBNull.Value);
 
-                        // Parámetros OUTPUT según el SP
-                        var paramId = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
-                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
-                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
+                        var idTipoDocumentoExternoParam = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        command.Parameters.Add(paramId);
-                        command.Parameters.Add(paramError);
-                        command.Parameters.Add(paramMensaje);
+                        command.Parameters.Add(idTipoDocumentoExternoParam);
+                        command.Parameters.Add(errorOutputParam);
+                        command.Parameters.Add(mensajeOutputParam);
 
                         await command.ExecuteNonQueryAsync();
 
-                        bool error = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensaje = paramMensaje.Value?.ToString() ?? string.Empty;
+                        long idRetornado = idTipoDocumentoExternoParam.Value != DBNull.Value ? Convert.ToInt64(idTipoDocumentoExternoParam.Value) : 0;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Tipo de documento externo creado correctamente");
 
-                        if (error)
+                        if (tieneError || idRetornado == 0)
                         {
-                            return BadRequest(new { message = "Error al crear en base de datos", detalle = mensaje });
+                            _logger.LogWarning($"Error al crear tipo de documento externo: {mensajeTexto}");
+                            return BadRequest(new { error = true, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        long newId = paramId.Value != DBNull.Value ? Convert.ToInt64(paramId.Value) : 0;
-                        return Ok(new { message = "Tipo de documento externo creado correctamente", idTipoDocumentoExterno = newId });
+                        _logger.LogInformation($"Tipo de documento externo creado con ID: {idRetornado}");
+                        return Ok(new { error = false, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al crear tipo de documento externo: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idTipoDocumentoExterno = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -130,43 +166,57 @@ namespace ApiAstilPos.Controllers
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@tiposDocumentoExterno", requestBody ?? (object)DBNull.Value);
 
-                        var paramId = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
-                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
-                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
+                        var idTipoDocumentoExternoParam = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        command.Parameters.Add(paramId);
-                        command.Parameters.Add(paramError);
-                        command.Parameters.Add(paramMensaje);
+                        command.Parameters.Add(idTipoDocumentoExternoParam);
+                        command.Parameters.Add(errorOutputParam);
+                        command.Parameters.Add(mensajeOutputParam);
 
                         await command.ExecuteNonQueryAsync();
 
-                        bool error = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensaje = paramMensaje.Value?.ToString() ?? string.Empty;
+                        long idRetornado = idTipoDocumentoExternoParam.Value != DBNull.Value ? Convert.ToInt64(idTipoDocumentoExternoParam.Value) : 0;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Tipo de documento externo actualizado correctamente");
 
-                        if (error)
+                        if (tieneError || idRetornado == 0)
                         {
-                            return BadRequest(new { message = "Error al actualizar en base de datos", detalle = mensaje });
+                            _logger.LogWarning($"Error al actualizar tipo de documento externo: {mensajeTexto}");
+                            return BadRequest(new { error = true, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        return Ok(new { message = "Tipo de documento externo actualizado correctamente" });
+                        _logger.LogInformation($"Tipo de documento externo con ID {idRetornado} actualizado correctamente.");
+                        return Ok(new { error = false, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al actualizar tipo de documento externo: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idTipoDocumentoExterno = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
-        [HttpDelete("tiposdocumentoexterno")]
-        public async Task<IActionResult> DeleteTipoDocumentoExterno([FromBody] JsonElement request)
+        public class DeleteTipoDocumentoRequest
         {
-            _logger.LogInformation("Borrando un tipo de documento externo");
+            public long idTipoDocumentoExterno { get; set; }
+        }
+
+        [HttpDelete("tiposdocumentoexterno")]
+        public async Task<IActionResult> DeleteTipoDocumentoExterno([FromBody] DeleteTipoDocumentoRequest request)
+        {
+            _logger.LogInformation($"Intentando eliminar el tipo de documento externo con ID: {request?.idTipoDocumentoExterno}");
+
+            if (request == null || request.idTipoDocumentoExterno <= 0)
+            {
+                return BadRequest(new { error = true, idTipoDocumentoExterno = 0, mensaje = "ID de tipo de documento no válido." });
+            }
 
             try
             {
-                string requestBody = request.GetRawText();
+                // Se envía la estructura JSON que espera la función de la BD
+                string requestBody = JsonConvert.SerializeObject(new[] { new { idTipoDocumentoExterno = request.idTipoDocumentoExterno } });
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -174,37 +224,37 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Delete_tiposDocumentoExterno", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@tiposDocumentoExterno", requestBody);
 
-                        // El SP espera la cadena JSON para extraer el ID dentro de SQL Server
-                        command.Parameters.AddWithValue("@tiposDocumentoExterno", requestBody ?? (object)DBNull.Value);
+                        var idTipoDocumentoExternoParam = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        var paramId = new SqlParameter("@idTipoDocumentoExterno", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
-                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
-                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
-
-                        command.Parameters.Add(paramId);
-                        command.Parameters.Add(paramError);
-                        command.Parameters.Add(paramMensaje);
+                        command.Parameters.Add(idTipoDocumentoExternoParam);
+                        command.Parameters.Add(errorOutputParam);
+                        command.Parameters.Add(mensajeOutputParam);
 
                         await command.ExecuteNonQueryAsync();
 
-                        bool error = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensaje = paramMensaje.Value?.ToString() ?? string.Empty;
+                        long idRetornado = idTipoDocumentoExternoParam.Value != DBNull.Value ? Convert.ToInt64(idTipoDocumentoExternoParam.Value) : request.idTipoDocumentoExterno;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Tipo de documento externo eliminado correctamente");
 
-                        if (error)
+                        if (tieneError)
                         {
-                            return BadRequest(new { message = "Error al eliminar en base de datos", detalle = mensaje });
+                            _logger.LogWarning($"Error al eliminar tipo de documento externo: {mensajeTexto}");
+                            return BadRequest(new { error = true, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        long idBorrado = paramId.Value != DBNull.Value ? Convert.ToInt64(paramId.Value) : 0;
-                        return Ok(new { message = "Tipo de documento externo borrado correctamente", idTipoDocumentoExternoBorrado = idBorrado });
+                        _logger.LogInformation($"Tipo de documento externo con ID {idRetornado} eliminado exitosamente.");
+                        return Ok(new { error = false, idTipoDocumentoExterno = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar tipo de documento externo: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError($"Error al eliminar tipo de documento externo: {ex.Message}");
+                return StatusCode(500, new { error = true, idTipoDocumentoExterno = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
     }

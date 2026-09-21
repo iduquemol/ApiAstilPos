@@ -4,6 +4,7 @@ using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Text.Json;
+using System.Text;
 
 namespace ApiAstilPos.Controllers
 {
@@ -22,7 +23,31 @@ namespace ApiAstilPos.Controllers
 
         private string GetConnectionString()
         {
-            return _configuration.GetConnectionString("SqlConnectionString");
+            return _configuration.GetConnectionString("SqlConnectionString") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Método auxiliar para extraer el mensaje formateado desde el output del Stored Procedure.
+        /// </summary>
+        private string ExtraerMensajeDb(string mensajeRaw, string mensajePorDefecto)
+        {
+            if (string.IsNullOrWhiteSpace(mensajeRaw))
+                return mensajePorDefecto;
+
+            try
+            {
+                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
+                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
+                {
+                    return listaMensajes[0]["mensaje"]?.ToString() ?? mensajePorDefecto;
+                }
+            }
+            catch
+            {
+                return mensajeRaw;
+            }
+
+            return mensajePorDefecto;
         }
 
         [HttpGet("usuarios")]
@@ -32,7 +57,8 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var usuarios = new List<Usuario>();
+                var jsonBuilder = new StringBuilder();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
@@ -42,24 +68,35 @@ namespace ApiAstilPos.Controllers
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
+                            int ordinal = reader.GetOrdinal("usuarios");
+
                             while (await reader.ReadAsync())
                             {
-                                var jsonUsuarios = reader.IsDBNull(reader.GetOrdinal("usuarios"))
-                                    ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("usuarios"));
-
-                                usuarios = JsonConvert.DeserializeObject<List<Usuario>>(jsonUsuarios);
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonBuilder.Append(reader.GetString(ordinal));
+                                }
                             }
                         }
                     }
                 }
 
+                string jsonCompleto = jsonBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(jsonCompleto))
+                {
+                    jsonCompleto = "[]";
+                }
+
+                var usuarios = JsonConvert.DeserializeObject<List<Usuario>>(jsonCompleto) ?? new List<Usuario>();
+
+                _logger.LogInformation($"Usuarios obtenidos: {usuarios.Count}");
                 return Ok(usuarios);
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al obtener usuarios: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idUsuario = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -71,7 +108,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = usuariosJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -79,7 +115,6 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_usuarios", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         command.Parameters.AddWithValue("@usuarios", requestBody ?? (object)DBNull.Value);
 
                         var paramIdUsuario = new SqlParameter("@idUsuario", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
@@ -90,43 +125,27 @@ namespace ApiAstilPos.Controllers
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        using (var reader = await command.ExecuteReaderAsync())
+                        await command.ExecuteNonQueryAsync();
+
+                        long idRetornado = paramIdUsuario.Value != DBNull.Value ? Convert.ToInt64(paramIdUsuario.Value) : 0;
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Usuario creado correctamente");
+
+                        if (tieneError || idRetornado == 0)
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                /* Loop para hidratar parámetros OUTPUT */
-                            }
+                            _logger.LogWarning($"Error al crear usuario: {mensajeTexto}");
+                            return BadRequest(new { error = true, idUsuario = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        long idUsuario = paramIdUsuario.Value != DBNull.Value ? Convert.ToInt64(paramIdUsuario.Value) : 0;
-                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
-
-                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idUsuario}, Error: {errorOutput}");
-
-                        if (errorOutput)
-                        {
-                            return BadRequest(new
-                            {
-                                error = true,
-                                idUsuario,
-                                mensaje = mensajeOutput
-                            });
-                        }
-
-                        return Ok(new
-                        {
-                            error = false,
-                            idUsuario,
-                            mensaje = mensajeOutput
-                        });
+                        _logger.LogInformation($"Usuario creado con ID: {idRetornado}");
+                        return Ok(new { error = false, idUsuario = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al crear usuario: {ex.Message}");
-                return StatusCode(500, $"Error interno: {ex.Message}");
+                return StatusCode(500, new { error = true, idUsuario = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -138,7 +157,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = usuariosJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -147,49 +165,49 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
+                        // sp_Update_usuarios solo recibe 3 parámetros: @usuarios, @errorOutput, @mensajeOutput
                         command.Parameters.AddWithValue("@usuarios", requestBody ?? (object)DBNull.Value);
 
-                        var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
-                        pErrorOutput.Direction = ParameterDirection.Output;
+                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1);
-                        pMensajeOutput.Direction = ParameterDirection.Output;
+                        command.Parameters.Add(paramError);
+                        command.Parameters.Add(paramMensaje);
 
-                        long idUsuarioEditado = 0;
-
+                        long idRetornado = 0;
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                idUsuarioEditado = reader.IsDBNull(reader.GetOrdinal("idUsuario"))
-                                    ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idUsuario"));
+                                idRetornado = reader["idUsuario"] != DBNull.Value ? Convert.ToInt64(reader["idUsuario"]) : 0;
                             }
                         }
 
-                        bool hasError = pErrorOutput.Value != DBNull.Value && (bool)pErrorOutput.Value;
-                        string mensaje = pMensajeOutput.Value?.ToString() ?? "Operación completada";
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Usuario actualizado correctamente");
 
-                        if (hasError)
+                        if (tieneError)
                         {
-                            return BadRequest(new { error = true, mensaje });
+                            _logger.LogWarning($"Error al actualizar usuario: {mensajeTexto}");
+                            return BadRequest(new { error = true, idUsuario = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        return Ok(new { message = mensaje, idUsuario = idUsuarioEditado });
+                        _logger.LogInformation($"Usuario con ID {idRetornado} actualizado correctamente.");
+                        return Ok(new { error = false, idUsuario = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al actualizar usuario: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idUsuario = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
         [HttpDelete("usuarios/{id}")]
         public async Task<IActionResult> DeleteUsuario(long id)
         {
-            _logger.LogInformation($"Borrando usuario con ID: {id}");
+            _logger.LogInformation($"Intentando eliminar el usuario con ID: {id}");
 
             try
             {
@@ -200,6 +218,7 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
+                        // sp_Delete_usuarios recibe @idUsuario (bigint), NO @usuarios (nvarchar)
                         command.Parameters.AddWithValue("@idUsuario", id);
 
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
@@ -208,46 +227,33 @@ namespace ApiAstilPos.Controllers
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        long idUsuarioBorrado = 0;
-
+                        long idRetornado = 0;
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
+                            if (await reader.ReadAsync())
                             {
-                                idUsuarioBorrado = reader.IsDBNull(reader.GetOrdinal("idUsuario"))
-                                    ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idUsuario"));
+                                idRetornado = reader["idUsuario"] != DBNull.Value ? Convert.ToInt64(reader["idUsuario"]) : id;
                             }
                         }
 
-                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Usuario eliminado correctamente");
 
-                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idUsuarioBorrado}, Error: {errorOutput}");
-
-                        if (errorOutput)
+                        if (tieneError)
                         {
-                            return BadRequest(new
-                            {
-                                error = true,
-                                idUsuario = idUsuarioBorrado,
-                                mensaje = mensajeOutput
-                            });
+                            _logger.LogWarning($"Error al eliminar usuario: {mensajeTexto}");
+                            return BadRequest(new { error = true, idUsuario = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        return Ok(new
-                        {
-                            error = false,
-                            idUsuarioBorrado,
-                            mensaje = mensajeOutput
-                        });
+                        _logger.LogInformation($"Usuario con ID {idRetornado} eliminado exitosamente.");
+                        return Ok(new { error = false, idUsuario = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar usuario: {ex.Message}");
-                return StatusCode(500, $"Error interno: {ex.Message}");
+                _logger.LogError($"Error al eliminar usuario: {ex.Message}");
+                return StatusCode(500, new { error = true, idUsuario = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
     }

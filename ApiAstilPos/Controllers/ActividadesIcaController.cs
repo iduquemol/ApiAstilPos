@@ -26,6 +26,30 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
+        /// <summary>
+        /// Método auxiliar para extraer el mensaje formateado desde el output del Stored Procedure.
+        /// </summary>
+        private string ExtraerMensajeDb(string mensajeRaw, string mensajePorDefecto)
+        {
+            if (string.IsNullOrWhiteSpace(mensajeRaw))
+                return mensajePorDefecto;
+
+            try
+            {
+                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
+                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
+                {
+                    return listaMensajes[0]["mensaje"]?.ToString() ?? mensajePorDefecto;
+                }
+            }
+            catch
+            {
+                return mensajeRaw;
+            }
+
+            return mensajePorDefecto;
+        }
+
         [HttpGet("actividadesIca")]
         public async Task<IActionResult> GetActividadesIca()
         {
@@ -59,13 +83,11 @@ namespace ApiAstilPos.Controllers
 
                 string jsonCompleto = jsonBuilder.ToString();
 
-                // Si el Stored Procedure no devolvió nada, inicializamos como arreglo vacío
                 if (string.IsNullOrWhiteSpace(jsonCompleto))
                 {
                     jsonCompleto = "[]";
                 }
 
-                // Deserialización única al finalizar la lectura de la base de datos
                 var actividades = JsonConvert.DeserializeObject<List<ActividadesIca>>(jsonCompleto) ?? new List<ActividadesIca>();
 
                 _logger.LogInformation($"Actividades ICA obtenidas: {actividades.Count}");
@@ -74,7 +96,7 @@ namespace ApiAstilPos.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error al obtener actividades ICA: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idActividadIca = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -86,7 +108,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = actividadesIcaJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -94,21 +115,11 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_actividadesIca", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         command.Parameters.AddWithValue("@actividadesIca", requestBody ?? (object)DBNull.Value);
 
-                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
+                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(idActividadIcaParam);
                         command.Parameters.Add(errorOutputParam);
@@ -116,25 +127,25 @@ namespace ApiAstilPos.Controllers
 
                         await command.ExecuteNonQueryAsync();
 
-                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? (long)idActividadIcaParam.Value : 0;
-                        bool tieneError = errorOutputParam.Value != DBNull.Value && (bool)errorOutputParam.Value;
-                        string mensaje = mensajeOutputParam.Value != DBNull.Value ? mensajeOutputParam.Value.ToString() : string.Empty;
+                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? Convert.ToInt64(idActividadIcaParam.Value) : 0;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Actividad ICA creada correctamente");
 
                         if (tieneError || idRetornado == 0)
                         {
-                            _logger.LogWarning($"Error al crear actividad ICA: {mensaje}");
-                            return BadRequest(string.IsNullOrEmpty(mensaje) ? "No se pudo crear la actividad ICA." : mensaje);
+                            _logger.LogWarning($"Error al crear actividad ICA: {mensajeTexto}");
+                            return BadRequest(new { error = true, idActividadIca = idRetornado, mensaje = mensajeTexto });
                         }
 
                         _logger.LogInformation($"Actividad ICA creada con ID: {idRetornado}");
-                        return Ok(new { message = string.IsNullOrEmpty(mensaje) ? "Actividad ICA creada correctamente" : mensaje, idActividadIca = idRetornado });
+                        return Ok(new { error = false, idActividadIca = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al crear actividad ICA: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idActividadIca = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -146,7 +157,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = actividadesIcaJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -154,21 +164,11 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Update_actividadesIca", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         command.Parameters.AddWithValue("@actividadesIca", requestBody ?? (object)DBNull.Value);
 
-                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
+                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(idActividadIcaParam);
                         command.Parameters.Add(errorOutputParam);
@@ -176,25 +176,25 @@ namespace ApiAstilPos.Controllers
 
                         await command.ExecuteNonQueryAsync();
 
-                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? (long)idActividadIcaParam.Value : 0;
-                        bool tieneError = errorOutputParam.Value != DBNull.Value && (bool)errorOutputParam.Value;
-                        string mensaje = mensajeOutputParam.Value != DBNull.Value ? mensajeOutputParam.Value.ToString() : string.Empty;
+                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? Convert.ToInt64(idActividadIcaParam.Value) : 0;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Actividad ICA actualizada correctamente");
 
                         if (tieneError || idRetornado == 0)
                         {
-                            _logger.LogWarning($"Error al actualizar actividad ICA: {mensaje}");
-                            return BadRequest(string.IsNullOrEmpty(mensaje) ? "No se pudo actualizar la actividad ICA." : mensaje);
+                            _logger.LogWarning($"Error al actualizar actividad ICA: {mensajeTexto}");
+                            return BadRequest(new { error = true, idActividadIca = idRetornado, mensaje = mensajeTexto });
                         }
 
                         _logger.LogInformation($"Actividad ICA con ID {idRetornado} actualizada correctamente.");
-                        return Ok(new { message = string.IsNullOrEmpty(mensaje) ? "Actividad ICA actualizada correctamente" : mensaje, idActividadIca = idRetornado });
+                        return Ok(new { error = false, idActividadIca = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al actualizar actividad ICA: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idActividadIca = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -213,21 +213,11 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Delete_actividadesIca", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         command.Parameters.AddWithValue("@actividadesIca", requestBody);
 
-                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
+                        var idActividadIcaParam = new SqlParameter("@idActividadIca", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var errorOutputParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeOutputParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(idActividadIcaParam);
                         command.Parameters.Add(errorOutputParam);
@@ -235,50 +225,25 @@ namespace ApiAstilPos.Controllers
 
                         await command.ExecuteNonQueryAsync();
 
-                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? (long)idActividadIcaParam.Value : 0;
-                        bool tieneError = errorOutputParam.Value != DBNull.Value && (bool)errorOutputParam.Value;
-                        string mensajeRaw = mensajeOutputParam.Value != DBNull.Value ? mensajeOutputParam.Value.ToString() : string.Empty;
-
-                        // Extraemos el texto del JSON que retorna el SP en @mensajeOutput
-                        string mensajeTexto = "Actividad ICA eliminada correctamente";
-                        if (!string.IsNullOrWhiteSpace(mensajeRaw))
-                        {
-                            try
-                            {
-                                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
-                                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
-                                {
-                                    mensajeTexto = listaMensajes[0]["mensaje"]?.ToString() ?? mensajeTexto;
-                                }
-                            }
-                            catch
-                            {
-                                mensajeTexto = mensajeRaw;
-                            }
-                        }
+                        long idRetornado = idActividadIcaParam.Value != DBNull.Value ? Convert.ToInt64(idActividadIcaParam.Value) : 0;
+                        bool tieneError = errorOutputParam.Value != DBNull.Value && Convert.ToBoolean(errorOutputParam.Value);
+                        string mensajeTexto = ExtraerMensajeDb(mensajeOutputParam.Value?.ToString(), "Actividad ICA eliminada correctamente");
 
                         if (tieneError || idRetornado == 0)
                         {
                             _logger.LogWarning($"Error al eliminar actividad ICA: {mensajeTexto}");
-                            return BadRequest(mensajeTexto);
+                            return BadRequest(new { error = true, idActividadIca = idRetornado, mensaje = mensajeTexto });
                         }
 
                         _logger.LogInformation($"Actividad ICA con ID {idRetornado} eliminada exitosamente.");
-
-                        // Retornamos ambas claves para compatibilidad absoluta con cualquier interfaz del frontend
-                        return Ok(new
-                        {
-                            message = mensajeTexto,
-                            mensaje = mensajeTexto,
-                            idActividadIca = idRetornado
-                        });
+                        return Ok(new { error = false, idActividadIca = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al eliminar actividad ICA: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idActividadIca = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
     }

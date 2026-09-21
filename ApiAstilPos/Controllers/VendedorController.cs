@@ -4,6 +4,7 @@ using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using System.Text.Json;
+using System.Text;
 
 namespace ApiAstilPos.Controllers
 {
@@ -22,7 +23,31 @@ namespace ApiAstilPos.Controllers
 
         private string GetConnectionString()
         {
-            return _configuration.GetConnectionString("SqlConnectionString");
+            return _configuration.GetConnectionString("SqlConnectionString") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Método auxiliar para extraer el mensaje formateado desde el output del Stored Procedure.
+        /// </summary>
+        private string ExtraerMensajeDb(string mensajeRaw, string mensajePorDefecto)
+        {
+            if (string.IsNullOrWhiteSpace(mensajeRaw))
+                return mensajePorDefecto;
+
+            try
+            {
+                var listaMensajes = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(mensajeRaw);
+                if (listaMensajes != null && listaMensajes.Count > 0 && listaMensajes[0].ContainsKey("mensaje"))
+                {
+                    return listaMensajes[0]["mensaje"]?.ToString() ?? mensajePorDefecto;
+                }
+            }
+            catch
+            {
+                return mensajeRaw;
+            }
+
+            return mensajePorDefecto;
         }
 
         [HttpGet("vendedores")]
@@ -32,34 +57,46 @@ namespace ApiAstilPos.Controllers
 
             try
             {
-                var vendedores = new List<Vendedor>();
+                var jsonBuilder = new StringBuilder();
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_vendedores", connection))
+                    using (var command = new SqlCommand("sp_Read_vendedoresId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
+                            int ordinal = reader.GetOrdinal("vendedores");
+
                             while (await reader.ReadAsync())
                             {
-                                var jsonVendedores = reader.IsDBNull(reader.GetOrdinal("vendedores"))
-                                    ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("vendedores"));
-
-                                vendedores = JsonConvert.DeserializeObject<List<Vendedor>>(jsonVendedores);
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonBuilder.Append(reader.GetString(ordinal));
+                                }
                             }
                         }
                     }
                 }
 
+                string jsonCompleto = jsonBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(jsonCompleto))
+                {
+                    jsonCompleto = "[]";
+                }
+
+                var vendedores = JsonConvert.DeserializeObject<List<Vendedor>>(jsonCompleto) ?? new List<Vendedor>();
+
+                _logger.LogInformation($"Vendedores obtenidos: {vendedores.Count}");
                 return Ok(vendedores);
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al obtener vendedores: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idVendedor = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -71,7 +108,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = vendedoresJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -79,11 +115,8 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_vendedores", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
-                        // Parámetro de Entrada JSON
                         command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
 
-                        // Parámetros de Salida (OUTPUT)
                         var paramIdVendedor = new SqlParameter("@idvendedor", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
                         var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
@@ -92,44 +125,27 @@ namespace ApiAstilPos.Controllers
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        // Consumir los result sets internos para que SQL Server llene los OUTPUT params
-                        using (var reader = await command.ExecuteReaderAsync())
+                        await command.ExecuteNonQueryAsync();
+
+                        long idRetornado = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Vendedor creado correctamente");
+
+                        if (tieneError || idRetornado == 0)
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                /* Loop de lectura para habilitar la hidratación de los parámetros OUTPUT */
-                            }
+                            _logger.LogWarning($"Error al crear vendedor: {mensajeTexto}");
+                            return BadRequest(new { error = true, idVendedor = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        long idVendedor = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
-                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
-
-                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idVendedor}, Error: {errorOutput}");
-
-                        if (errorOutput)
-                        {
-                            return BadRequest(new
-                            {
-                                error = true,
-                                idVendedor,
-                                mensaje = mensajeOutput
-                            });
-                        }
-
-                        return Ok(new
-                        {
-                            error = false,
-                            idVendedor,
-                            mensaje = mensajeOutput
-                        });
+                        _logger.LogInformation($"Vendedor creado con ID: {idRetornado}");
+                        return Ok(new { error = false, idVendedor = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al crear vendedor: {ex.Message}");
-                return StatusCode(500, $"Error interno: {ex.Message}");
+                return StatusCode(500, new { error = true, idVendedor = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
@@ -141,7 +157,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = vendedoresJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -149,113 +164,86 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Update_vendedores", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
                         command.Parameters.AddWithValue("@vendedores", requestBody ?? (object)DBNull.Value);
 
-                        var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
-                        pErrorOutput.Direction = ParameterDirection.Output;
+                        var paramIdVendedor = new SqlParameter("@idvendedor", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1);
-                        pMensajeOutput.Direction = ParameterDirection.Output;
+                        command.Parameters.Add(paramIdVendedor);
+                        command.Parameters.Add(paramError);
+                        command.Parameters.Add(paramMensaje);
 
-                        long idVendedorEditado = 0;
+                        await command.ExecuteNonQueryAsync();
 
-                        // Consumimos el SELECT final del SP
-                        using (var reader = await command.ExecuteReaderAsync())
+                        long idRetornado = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Vendedor actualizado correctamente");
+
+                        if (tieneError || idRetornado == 0)
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                idVendedorEditado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
-                                    ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
-                            }
+                            _logger.LogWarning($"Error al actualizar vendedor: {mensajeTexto}");
+                            return BadRequest(new { error = true, idVendedor = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        bool hasError = pErrorOutput.Value != DBNull.Value && (bool)pErrorOutput.Value;
-                        string mensaje = pMensajeOutput.Value?.ToString() ?? "Operación completada";
-
-                        if (hasError)
-                        {
-                            return BadRequest(new { error = true, mensaje });
-                        }
-
-                        return Ok(new { message = mensaje, idVendedor = idVendedorEditado });
+                        _logger.LogInformation($"Vendedor con ID {idRetornado} actualizado correctamente.");
+                        return Ok(new { error = false, idVendedor = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al actualizar vendedor: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, new { error = true, idVendedor = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
 
         [HttpDelete("vendedores/{id}")]
         public async Task<IActionResult> DeleteVendedor(long id)
         {
-            _logger.LogInformation($"Borrando vendedor con ID: {id}");
+            _logger.LogInformation($"Intentando eliminar el vendedor con ID: {id}");
 
             try
             {
+                string requestBody = JsonConvert.SerializeObject(new { idVendedor = id });
+
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
                     using (var command = new SqlCommand("sp_Delete_vendedores", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@vendedores", requestBody);
 
-                        // 1. Parámetro de entrada
-                        command.Parameters.AddWithValue("@idVendedor", id);
-
-                        // 2. Parámetros de salida (OUTPUT)
+                        var paramIdVendedor = new SqlParameter("@idvendedor", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
                         var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
+                        command.Parameters.Add(paramIdVendedor);
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        long idVendedorBorrado = 0;
+                        await command.ExecuteNonQueryAsync();
 
-                        // 3. Consumir el SELECT final del SP para poblar los OUTPUTs y obtener los valores
-                        using (var reader = await command.ExecuteReaderAsync())
+                        long idRetornado = paramIdVendedor.Value != DBNull.Value ? Convert.ToInt64(paramIdVendedor.Value) : 0;
+                        bool tieneError = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeTexto = ExtraerMensajeDb(paramMensaje.Value?.ToString(), "Vendedor eliminado correctamente");
+
+                        if (tieneError || idRetornado == 0)
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                idVendedorBorrado = reader.IsDBNull(reader.GetOrdinal("idVendedor"))
-                                    ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idVendedor"));
-                            }
+                            _logger.LogWarning($"Error al eliminar vendedor: {mensajeTexto}");
+                            return BadRequest(new { error = true, idVendedor = idRetornado, mensaje = mensajeTexto });
                         }
 
-                        // 4. Leer los resultados de los parámetros OUTPUT
-                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
-
-                        _logger.LogInformation($"Procedimiento Delete ejecutado. ID: {idVendedorBorrado}, Error: {errorOutput}");
-
-                        if (errorOutput)
-                        {
-                            return BadRequest(new
-                            {
-                                error = true,
-                                idVendedor = idVendedorBorrado,
-                                mensaje = mensajeOutput
-                            });
-                        }
-
-                        return Ok(new
-                        {
-                            error = false,
-                            idVendedorBorrado,
-                            mensaje = mensajeOutput
-                        });
+                        _logger.LogInformation($"Vendedor con ID {idRetornado} eliminado exitosamente.");
+                        return Ok(new { error = false, idVendedor = idRetornado, mensaje = mensajeTexto });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar vendedor: {ex.Message}");
-                return StatusCode(500, $"Error interno: {ex.Message}");
+                _logger.LogError($"Error al eliminar vendedor: {ex.Message}");
+                return StatusCode(500, new { error = true, idVendedor = 0, mensaje = $"Error interno: {ex.Message}" });
             }
         }
     }
