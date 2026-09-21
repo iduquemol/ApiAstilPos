@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -17,12 +16,6 @@ namespace ApiAstilPos.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<TercerosController> _logger;
 
-        // Mapeo de codigoTipoDocumentoId (catálogo interno, código DIAN de
-        // identificación) al catálogo oficial DIAN/UBL 2.1 "Tipos de Documento"
-        // (1-12) que espera el proveedor externo de facturación electrónica.
-        // No hay correspondencia 1:1 con idTipoDocumentoId ni con
-        // codigoTipoDocumentoId directamente; confirmado empíricamente para
-        // Cédula ("13" -> 3).
         private static readonly Dictionary<string, int> TipoDocumentoExternoMap = new()
         {
             { "11", 1 },  // Registro civil
@@ -48,6 +41,27 @@ namespace ApiAstilPos.Controllers
         private string GetConnectionString()
         {
             return _configuration.GetConnectionString("SqlConnectionString");
+        }
+
+        // Método auxiliar interno para parsear el mensaje JSON que arma la BD en @mensajeOutput
+        private string ExtraerMensajeDb(string rawMensaje, string mensajeDefault)
+        {
+            if (string.IsNullOrWhiteSpace(rawMensaje)) return mensajeDefault;
+
+            try
+            {
+                var lista = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(rawMensaje);
+                if (lista != null && lista.Count > 0 && lista[0].TryGetValue("mensaje", out var msg))
+                {
+                    return msg?.ToString() ?? mensajeDefault;
+                }
+            }
+            catch
+            {
+                return rawMensaje; // Fallback si viene en texto plano
+            }
+
+            return mensajeDefault;
         }
 
         [HttpGet("terceros")]
@@ -127,10 +141,10 @@ namespace ApiAstilPos.Controllers
         [HttpPost("terceros-busqueda")]
         public async Task<IActionResult> GetTercerosBusqueda([FromBody] JsonElement request)
         {
-            _logger.LogInformation($"Buscando terceros ");
+            _logger.LogInformation($"Buscando terceros");
 
             try
-            {                
+            {
                 var query = request.TryGetProperty("query", out var queryElement)
                     ? queryElement.GetString()
                     : null;
@@ -236,12 +250,11 @@ namespace ApiAstilPos.Controllers
         [HttpPost("terceros")]
         public async Task<IActionResult> CreateTercero([FromBody] JsonElement tercerosJson)
         {
-            _logger.LogInformation("Creando un nuevo tercero");
+            _logger.LogInformation("Creando un tercero");
 
             try
             {
                 string requestBody = tercerosJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -250,50 +263,44 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        // Parámetro de Entrada
                         command.Parameters.AddWithValue("@terceros", requestBody ?? (object)DBNull.Value);
 
-                        // Parámetros de Salida (OUTPUT)
                         var paramIdTercero = new SqlParameter("@idtercero", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
                         var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
-                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output }; // -1 es nvarchar(max)
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(paramIdTercero);
                         command.Parameters.Add(paramError);
                         command.Parameters.Add(paramMensaje);
 
-                        // Ejecutamos el Reader para consumir los SELECTs internos del SP
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                /* Consume los result sets para permitir el llenado de los parámetros OUTPUT */
-                            }
+                            while (await reader.ReadAsync()) { }
                         }
 
-                        // Obtener valores de los parámetros OUTPUT
                         long idTercero = paramIdTercero.Value != DBNull.Value ? Convert.ToInt64(paramIdTercero.Value) : 0;
                         bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
-                        string mensajeOutput = paramMensaje.Value?.ToString() ?? string.Empty;
+                        string mensajeRaw = paramMensaje.Value?.ToString() ?? string.Empty;
 
-                        _logger.LogInformation($"Procedimiento ejecutado. ID: {idTercero}, Error: {errorOutput}");
+                        string mensajeFinal = ExtraerMensajeDb(mensajeRaw, errorOutput ? "No se pudo crear el tercero." : "Tercero creado correctamente.");
 
-                        // Si ocurrió un error en la lógica de negocio dentro del SP
-                        if (errorOutput)
+                        if (errorOutput || idTercero == 0)
                         {
+                            _logger.LogWarning($"Error al crear tercero: {mensajeFinal}");
                             return BadRequest(new
                             {
                                 error = true,
-                                idTercero,
-                                mensaje = mensajeOutput
+                                idTercero = 0,
+                                mensaje = mensajeFinal
                             });
                         }
 
+                        _logger.LogInformation($"Tercero creado correctamente con ID {idTercero}");
                         return Ok(new
                         {
                             error = false,
                             idTercero,
-                            mensaje = mensajeOutput
+                            mensaje = mensajeFinal
                         });
                     }
                 }
@@ -313,7 +320,6 @@ namespace ApiAstilPos.Controllers
             try
             {
                 string requestBody = tercerosJson.GetRawText();
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -322,80 +328,117 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        // 1. Parámetro de entrada con el JSON
                         command.Parameters.AddWithValue("@terceros", requestBody ?? (object)DBNull.Value);
 
-                        // 2. Parámetros OUTPUT requeridos por la firma del SP
-                        var pIdTercero = command.Parameters.Add("@idtercero", SqlDbType.BigInt);
-                        pIdTercero.Direction = ParameterDirection.Output;
+                        var paramIdTercero = new SqlParameter("@idtercero", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
-                        var pErrorOutput = command.Parameters.Add("@errorOutput", SqlDbType.Bit);
-                        pErrorOutput.Direction = ParameterDirection.Output;
+                        command.Parameters.Add(paramIdTercero);
+                        command.Parameters.Add(paramError);
+                        command.Parameters.Add(paramMensaje);
 
-                        var pMensajeOutput = command.Parameters.Add("@mensajeOutput", SqlDbType.NVarChar, -1); // -1 equivale a NVARCHAR(MAX)
-                        pMensajeOutput.Direction = ParameterDirection.Output;
-
-                        // 3. Ejecutar
-                        await command.ExecuteNonQueryAsync();
-
-                        // 4. Leer resultados de salida
-                        bool hasError = pErrorOutput.Value != DBNull.Value && (bool)pErrorOutput.Value;
-                        string mensaje = pMensajeOutput.Value?.ToString() ?? "Operación completada";
-
-                        if (hasError)
+                        using (var reader = await command.ExecuteReaderAsync())
                         {
-                            return BadRequest(new { error = true, mensaje });
+                            while (await reader.ReadAsync()) { }
                         }
 
-                        return Ok(new { message = mensaje, idTercero = pIdTercero.Value });
+                        long idTercero = paramIdTercero.Value != DBNull.Value ? Convert.ToInt64(paramIdTercero.Value) : 0;
+                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeRaw = paramMensaje.Value?.ToString() ?? string.Empty;
+
+                        string mensajeFinal = ExtraerMensajeDb(mensajeRaw, errorOutput ? "No se pudo actualizar el tercero." : "Tercero actualizado correctamente.");
+
+                        if (errorOutput || idTercero == 0)
+                        {
+                            _logger.LogWarning($"Error al actualizar tercero ID {idTercero}: {mensajeFinal}");
+                            return BadRequest(new
+                            {
+                                error = true,
+                                idTercero = 0,
+                                mensaje = mensajeFinal
+                            });
+                        }
+
+                        _logger.LogInformation($"Tercero con ID {idTercero} actualizado correctamente.");
+                        return Ok(new
+                        {
+                            error = false,
+                            idTercero,
+                            mensaje = mensajeFinal
+                        });
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error al actualizar tercero: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
 
         [HttpDelete("terceros/{id}")]
-        public async Task<IActionResult> DeleteTercero(int id)
+        public async Task<IActionResult> DeleteTercero(long id)
         {
-            _logger.LogInformation("Borrando un tercero");
+            _logger.LogInformation($"Intentando eliminar el tercero con ID: {id}");
 
             try
             {
-                //var idTercero = request.?.Value<long>() ?? 0;
-                //_logger.LogInformation($"ID Tercero a borrar: {idTercero}");
-                long idTerceroBorrado = 0;
+                string requestBody = JsonConvert.SerializeObject(new { idTercero = id });
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Delete_tercerosId", connection))
+                    using (var command = new SqlCommand("sp_Delete_terceros", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@idTercero", id);
+
+                        command.Parameters.AddWithValue("@terceros", requestBody);
+
+                        var paramIdTercero = new SqlParameter("@idTercero", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
+                        var paramError = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var paramMensaje = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
+
+                        command.Parameters.Add(paramIdTercero);
+                        command.Parameters.Add(paramError);
+                        command.Parameters.Add(paramMensaje);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                idTerceroBorrado = reader.IsDBNull(reader.GetOrdinal("idTercero"))
-                                    ? 0
-                                    : reader.GetInt64(reader.GetOrdinal("idTercero"));
-                            }
+                            while (await reader.ReadAsync()) { }
                         }
 
-                        _logger.LogInformation("Tercero borrado correctamente.");
-                        return Ok(new { message = "Tercero borrado correctamente", idTerceroBorrado = idTerceroBorrado });
+                        long idTercero = paramIdTercero.Value != DBNull.Value ? Convert.ToInt64(paramIdTercero.Value) : 0;
+                        bool errorOutput = paramError.Value != DBNull.Value && Convert.ToBoolean(paramError.Value);
+                        string mensajeRaw = paramMensaje.Value?.ToString() ?? string.Empty;
+
+                        string mensajeFinal = ExtraerMensajeDb(mensajeRaw, errorOutput ? "No se pudo eliminar el tercero." : "Tercero eliminado correctamente.");
+
+                        if (errorOutput || idTercero == 0)
+                        {
+                            _logger.LogWarning($"Error al eliminar tercero ID {id}: {mensajeFinal}");
+                            return BadRequest(new
+                            {
+                                error = true,
+                                idTercero = 0,
+                                mensaje = mensajeFinal
+                            });
+                        }
+
+                        _logger.LogInformation($"Tercero con ID {idTercero} eliminado exitosamente.");
+                        return Ok(new
+                        {
+                            error = false,
+                            idTercero,
+                            mensaje = mensajeFinal
+                        });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al borrar tercero: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError($"Error al eliminar tercero con ID {id}: {ex.Message}");
+                return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
     }
