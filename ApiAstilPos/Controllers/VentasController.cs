@@ -100,7 +100,7 @@ namespace ApiAstilPos.Controllers
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    using (var command = new SqlCommand("sp_Read_ventaId", connection))
+                    using (var command = new SqlCommand("sp_Read_ventasId", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@idVenta", idVenta);
@@ -109,9 +109,9 @@ namespace ApiAstilPos.Controllers
                         {
                             while (await reader.ReadAsync())
                             {
-                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                var jsonVenta = reader.IsDBNull(reader.GetOrdinal("ventas"))
                                     ? null
-                                    : reader.GetString(reader.GetOrdinal("venta"));
+                                    : reader.GetString(reader.GetOrdinal("ventas"));
 
                                 if (!string.IsNullOrEmpty(jsonVenta))
                                 {
@@ -282,6 +282,14 @@ namespace ApiAstilPos.Controllers
                                 _logger.LogInformation($"Body DIAN: {bodyDian}");
                             }
                         }
+                        if (bodyDian == null)
+                        {
+                            _logger.LogError($"No se pudo obtener el Body DIAN para el ID de factura {facturaId}");
+                            return BadRequest("Error: No se pudo generar el cuerpo para la DIAN.");
+                        }
+
+                        // Imprimir el JSON completo en el Log
+                        _logger.LogInformation($"JSON enviado a la API externa para la factura {facturaId}:\n{bodyDian}");
 
                         var apiResponse = await CallExternalApiAsync(bodyDian.ToString(), facturaId, venta.IdMetodoDian);
 
@@ -291,10 +299,28 @@ namespace ApiAstilPos.Controllers
                             using (var command = new SqlCommand("sp_Insert_responseDian", connection))
                             {
                                 command.CommandType = CommandType.StoredProcedure;
-                                command.Parameters.AddWithValue("@responseDianJson", apiResponse.contentResponse ?? (object)DBNull.Value);
-                                command.Parameters.AddWithValue("@idResponseDian", 0);
 
-                                var responseDianId = await command.ExecuteScalarAsync();
+                                // 1. Parámetro de entrada
+                                command.Parameters.AddWithValue("@responseDianJson", apiResponse.contentResponse ?? (object)DBNull.Value);
+
+                                var pIdResponseDian = command.Parameters.Add("@idResponseDian", SqlDbType.BigInt);
+                                pIdResponseDian.Direction = ParameterDirection.InputOutput; // O ParameterDirection.Output
+                                pIdResponseDian.Value = 0;
+
+                                var pCufe = command.Parameters.Add("@cufe", SqlDbType.NVarChar, 255);
+                                pCufe.Direction = ParameterDirection.Output;
+
+                                var pFirmaDigital = command.Parameters.Add("@firmaDigital", SqlDbType.NVarChar, -1); 
+                                pFirmaDigital.Direction = ParameterDirection.Output;
+
+                                var pQrCode = command.Parameters.Add("@qrCode", SqlDbType.NVarChar, -1);
+                                pQrCode.Direction = ParameterDirection.Output;
+
+                                await command.ExecuteNonQueryAsync();
+
+                                var idResponseDianObtenido = pIdResponseDian.Value;
+                                var cufeGenerado = pCufe.Value;
+
                                 _logger.LogInformation("Response Factura Dian creada correctamente.");
                             }
 

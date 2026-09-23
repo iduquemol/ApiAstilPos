@@ -10,7 +10,10 @@ namespace ApiAstilPos.Models
         public string CodigoProducto { get; set; }
         public string NombreProducto { get; set; }
         public decimal CantidadVenta { get; set; }
+        public decimal CantidadNotaCredito { get; set; }
+        public bool IndNotaCredito { get; set; }
         public decimal PrecioUnitarioVenta { get; set; }
+        public decimal BaseIvaVenta { get; set; }
         public decimal PorcentajeIvaVenta { get; set; }
         public decimal IvaVenta { get; set; }
         public decimal PorcentajeDescuentoVenta { get; set; }
@@ -27,5 +30,7 @@ namespace ApiAstilPos.Models
         public decimal? TotalVenta { get; set; }
         public decimal? CostoUnitarioVenta { get; set; }
         public decimal? CostoTotalVenta { get; set; }
+        public long IdTipoProducto { get; set; }
+        public bool? IndicadorMuestra { get; set; }
     }
 }

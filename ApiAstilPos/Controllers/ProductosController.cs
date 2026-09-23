@@ -63,6 +63,48 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpPost("productos-busqueda")]
+        public async Task<IActionResult> GetProductosBusqueda([FromBody] JsonElement request)
+        {
+            _logger.LogInformation($"Buscando productos");
+
+            try
+            {
+                var query = request.TryGetProperty("query", out var queryElement)
+                    ? queryElement.GetString()
+                    : null;
+
+                var productos = new List<Producto>();
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Search_productos", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@searchText", query ?? (object)DBNull.Value);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var jsonProducto = reader.IsDBNull(reader.GetOrdinal("producto"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("producto"));
+                                productos = JsonConvert.DeserializeObject<List<Producto>>(jsonProducto);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(productos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al obtener productos: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
         [HttpPost("productos-venta-tercero")]
         public async Task<IActionResult> PostProductosVentaTercero([FromBody] JsonElement request)
         {

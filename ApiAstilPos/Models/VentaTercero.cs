@@ -12,10 +12,7 @@ namespace ApiAstilPos.Models
         public string PrimerNombre { get; set; }
         public string PrimerApellido { get; set; }
         public string RazonSocial { get; set; }
-        public string? TelefonoTercero { get; set; }
-        public long? IdMunicipio { get; set; }
         public string? EmailTercero { get; set; }
-        public long? IdTipoPersona { get; set; }
         public bool? TerceroGeneral { get; set; }
     }
 }
