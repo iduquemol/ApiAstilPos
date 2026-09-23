@@ -2,12 +2,11 @@
 {
     public class mediosPago
     {
-        public int idMedioPago { get; set; }
-
-        public string codigoMedioPago { get; set; }
-
-        public string nombreMedioPago { get; set; }
-
-        public string codigoDianMedioPago { get; set; }
+        public short IdMedioPago { get; set; }
+        public string CodigoMedioPago { get; set; }
+        public string NombreMedioPago { get; set; }
+        public string CodigoDianMedioPago { get; set; }
+        public DateTime? FechaGrabacionMedioPago { get; set; }
+        public string? IdMedioPagoExterno { get; set; }
     }
 }
