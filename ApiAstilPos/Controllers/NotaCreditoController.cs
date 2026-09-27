@@ -9,7 +9,7 @@ using System.Text;
 namespace ApiAstilPos.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api")]
     public class NotaCreditoController : ControllerBase
     {
         private static readonly HttpClient httpClient = new HttpClient();
@@ -111,17 +111,26 @@ namespace ApiAstilPos.Controllers
             }
         }
 
-        [HttpPost]
+        [HttpPost("notacredito")]
         public async Task<IActionResult> CreateNotaCredito([FromBody] NotaCredito notaCredito)
         {
             _logger.LogInformation("Creando una nueva nota credito");
 
+            if (notaCredito == null)
+            {
+                return BadRequest("El cuerpo de la solicitud no puede ser nulo.");
+            }
+
             try
             {
-                string requestBody = JsonConvert.SerializeObject(notaCredito);
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
+                var jsonSettings = new JsonSerializerSettings
+                {
+                    DateFormatString = "yyyy-MM-dd",
+                    NullValueHandling = NullValueHandling.Ignore 
+                };
 
-                object notaCreditoId = null;
+                string requestBody = JsonConvert.SerializeObject(notaCredito, jsonSettings);
+                _logger.LogInformation($"Cuerpo de la solicitud enviado al SP: {requestBody}");
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -129,20 +138,29 @@ namespace ApiAstilPos.Controllers
                     using (var command = new SqlCommand("sp_Create_notaCredito", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@notaCredito", requestBody ?? (object)DBNull.Value);
 
-                        // Ejecutar el SP
-                        notaCreditoId = await command.ExecuteScalarAsync();
+                        var parameter = command.Parameters.Add("@notaCredito", SqlDbType.NVarChar, -1);
+                        parameter.Value = string.IsNullOrEmpty(requestBody) ? DBNull.Value : requestBody;
 
-                        _logger.LogInformation("Nota Credito creada correctamente.");
-                        return Ok(new { message = "Nota Credito creada correctamente", idNotaCredito = notaCreditoId });
+                        object result = await command.ExecuteScalarAsync();
+
+                        if (result != null && long.TryParse(result.ToString(), out long idNotaCredito) && idNotaCredito > 0)
+                        {
+                            _logger.LogInformation($"Nota Credito creada correctamente con ID: {idNotaCredito}");
+                            return Ok(new { message = "Nota Credito creada correctamente", idNotaCredito });
+                        }
+                        else
+                        {
+                            _logger.LogWarning("El Stored Procedure no generó un idNotaCredito válido. (Posible falta de idVenta o falla en auditoría).");
+                            return BadRequest("No se pudo crear la Nota Crédito. Verifique que la Venta relacionada sea válida.");
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al crear nota credito: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
+                _logger.LogError(ex, "Error crítico al crear nota credito");
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
 

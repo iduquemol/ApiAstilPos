@@ -27,5 +27,6 @@ namespace ApiAstilPos.Models
         public long IdTipoDocumentoExterno { get; set; }
         public string? NombreTipoDocumentoExterno { get; set; }
         public string? CodigoTipoDocumentoExterno { get; set; }
+        public string? PrefijoConsecutivo { get; set; }
     }
 }
