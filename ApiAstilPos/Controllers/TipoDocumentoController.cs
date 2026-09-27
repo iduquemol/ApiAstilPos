@@ -102,38 +102,42 @@ namespace ApiAstilPos.Controllers
         }
 
         [HttpGet("notacredito")]
-        public async Task<IActionResult> GetTiposDocumentoNotaCredito()
+        public async Task<IActionResult> GetTiposDocumentoNotaCredito([FromQuery] long? idTipoDocumentoExterno = null)
         {
-            _logger.LogInformation("Obteniendo lista de tipos de documento de notas credito");
+            _logger.LogInformation("Obteniendo lista de tipos de documento de notas crédito");
 
             try
             {
-                var tiposDocumento = new List<TipoDocumento>();
-                using var connection = new SqlConnection(GetConnectionString());
+                string jsonTiposDocumento = "[]";
+
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
                     using (var command = new SqlCommand("sp_Read_tiposDocumentoNotasCredito", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        using (var reader = await command.ExecuteReaderAsync())
+                        command.Parameters.Add("@idTipoDocumentoExterno", SqlDbType.BigInt).Value =
+                            (object)idTipoDocumentoExterno ?? DBNull.Value;
+
+                        var result = await command.ExecuteScalarAsync();
+
+                        if (result != null && result != DBNull.Value)
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                var jsonTiposDocumento = reader.IsDBNull(reader.GetOrdinal("tiposDocumentoNotasCredito"))
-                                    ? "[]"
-                                    : reader.GetString(reader.GetOrdinal("tiposDocumentoNotasCredito"));
-                                tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonTiposDocumento);
-                            }
+                            jsonTiposDocumento = result.ToString();
                         }
                     }
                 }
-                _logger.LogInformation($"Tipos de documento de nota credito obtenidos: {tiposDocumento.Count}");
+
+                var tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonTiposDocumento)
+                                     ?? new List<TipoDocumento>();
+
+                _logger.LogInformation($"Tipos de documento de nota crédito obtenidos: {tiposDocumento.Count}");
                 return Ok(tiposDocumento);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener tipos de documento de nota credito: {ex.Message}");
+                _logger.LogError($"Error al obtener tipos de documento de nota crédito: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
