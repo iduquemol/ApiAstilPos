@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using ApiAstilPos.Models;
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -126,7 +127,8 @@ namespace ApiAstilPos.Controllers
                 var jsonSettings = new JsonSerializerSettings
                 {
                     DateFormatString = "yyyy-MM-dd",
-                    NullValueHandling = NullValueHandling.Ignore 
+                    NullValueHandling = NullValueHandling.Ignore,
+                    ContractResolver = new CamelCasePropertyNamesContractResolver()
                 };
 
                 string requestBody = JsonConvert.SerializeObject(notaCredito, jsonSettings);

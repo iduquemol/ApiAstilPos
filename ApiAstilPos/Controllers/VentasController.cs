@@ -237,6 +237,10 @@ namespace ApiAstilPos.Controllers
 
                 object facturaId = null;
                 object bodyDian = null;
+                byte[] attachedDocumentBytes = null;
+                string cufe = string.Empty;
+                string firmaDigital = string.Empty;
+                string qrCode = string.Empty;
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
@@ -296,6 +300,17 @@ namespace ApiAstilPos.Controllers
                         if (apiResponse.IsSuccess)
                         {
                             _logger.LogInformation("API externa llamada exitosamente.");
+
+                            // Extraer el documento adjunto en base64
+                            string attachedDocumentBase64 = ExtraerAttachedDocumentBase64(apiResponse.contentResponse);
+
+                            if (!string.IsNullOrEmpty(attachedDocumentBase64))
+                            {
+                                // Convertir de base64 a bytes si es necesario
+                                attachedDocumentBytes = Convert.FromBase64String(attachedDocumentBase64);
+                                _logger.LogInformation($"Documento adjunto obtenido, tamaño: {attachedDocumentBytes.Length} bytes");
+                            }
+
                             using (var command = new SqlCommand("sp_Insert_responseDian", connection))
                             {
                                 command.CommandType = CommandType.StoredProcedure;
@@ -319,29 +334,68 @@ namespace ApiAstilPos.Controllers
                                 await command.ExecuteNonQueryAsync();
 
                                 var idResponseDianObtenido = pIdResponseDian.Value;
-                                var cufeGenerado = pCufe.Value;
+                                cufe = pCufe.Value != DBNull.Value
+                                ? pCufe.Value.ToString()
+                                : string.Empty;
+
+                                qrCode = pQrCode.Value != DBNull.Value
+                                ? pQrCode.Value.ToString()
+                                : string.Empty;
 
                                 _logger.LogInformation("Response Factura Dian creada correctamente.");
                             }
 
                             // ENVIAR EMAIL
-                            //try
-                            //{
-                            //    var facturaEmailDto = new FacturaEmailDto
-                            //    {
-                            //        Email = venta.TerceroVenta.EmailTercero,
-                            //        NombreCliente = venta.TerceroVenta.RazonSocial,
-                            //        NumeroDocumento = apiResponse.numeroFacturaDian,
-                            //        Total = venta.TotalVenta
-                            //    };
+                            // Obtener datos para imprimir la factura
+                            PrintVenta printVenta = null;
+                            using (var command = new SqlCommand("sp_Print_ventaId", connection))
+                            {
+                                command.CommandType = CommandType.StoredProcedure;
+                                command.Parameters.AddWithValue("@idVenta", facturaId);
 
-                            //    await _emailService.SendFacturaEmailAsync(facturaEmailDto);
-                            //    _logger.LogInformation($"Email enviado exitosamente a {facturaEmailDto.Email}");
-                            //}
-                            //catch (Exception emailEx)
-                            //{
-                            //    _logger.LogWarning($"Factura creada pero falló el envío de email: {emailEx.Message}");
-                            //}
+                                using (var reader = await command.ExecuteReaderAsync())
+                                {
+                                    while (await reader.ReadAsync())
+                                    {
+                                        var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                            ? "[]"
+                                            : reader.GetString(reader.GetOrdinal("venta"));
+                                        printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                                    }
+                                }
+                            }
+
+                            // Generar PDF
+                            var pdfService = new FacturaPdfService();
+                            printVenta.Cufe = cufe;
+                            printVenta.CodigoQR = qrCode;
+                            byte[] pdfBytes = pdfService.GenerarPdfFactura(printVenta, Convert.ToInt32(venta.IdMetodoDian));
+
+                            _logger.LogInformation("PDF de factura generado correctamente.");
+
+                            try
+                            {
+                                var facturaEmailDto = new FacturaEmailDto
+                                {
+                                    Email = printVenta.ClienteEmail,
+                                    NombreCliente = printVenta.ClienteRazonSocial,
+                                    NumeroDocumento = apiResponse.numeroFacturaDian,
+                                    SubjectEmail = printVenta.SubjectEmail ?? string.Empty,
+                                    Total = printVenta.TotalVenta,
+                                    PdfAttachment = pdfBytes,
+                                    PdfFileName = $"Factura_{apiResponse.numeroFacturaDian}.pdf",
+                                    XmlAttachment = attachedDocumentBytes,
+                                    XmlFileName = $"Factura_{apiResponse.numeroFacturaDian}.xml",
+                                    FacturadorNombre = printVenta.FacturadorNombre ?? string.Empty,
+                                };
+
+                                await _emailService.SendFacturaEmailAsync(facturaEmailDto,Convert.ToInt32(venta.IdMetodoDian));
+                                _logger.LogInformation($"Email enviado exitosamente a {facturaEmailDto.Email}");
+                            }
+                            catch (Exception emailEx)
+                            {
+                                _logger.LogWarning($"Factura creada pero falló el envío de email: {emailEx.Message}");
+                            }
 
                             return Ok(new
                             {
@@ -468,9 +522,7 @@ namespace ApiAstilPos.Controllers
                     {
                         // Convertir de base64 a bytes si es necesario
                         attachedDocumentBytes = Convert.FromBase64String(attachedDocumentBase64);
-                        _logger.LogInformation($"Documento adjunto obtenido, tamaño: {attachedDocumentBytes.Length} bytes");
-
-                        // Usar el documento según necesites
+                        _logger.LogInformation($"Documento adjunto obtenido, tamaño: {attachedDocumentBytes.Length} bytes");                       
                     }
 
                     using (var command = new SqlCommand("sp_Insert_responseDian", connection))
