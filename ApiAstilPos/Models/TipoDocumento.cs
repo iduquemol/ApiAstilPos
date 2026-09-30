@@ -23,7 +23,10 @@ namespace ApiAstilPos.Models
         public long? IdTipoDocumentoCotiza { get; set; }
         public long? IdTipoDocumentoND { get; set; }
         public long? IdConsecutivoHabilitacion { get; set; }
-   
+
+        public long? IdMedioPago { get; set; }
+        public string? NombreMedioPago { get; set; }
+
         public long IdTipoDocumentoExterno { get; set; }
         public string? NombreTipoDocumentoExterno { get; set; }
         public string? CodigoTipoDocumentoExterno { get; set; }

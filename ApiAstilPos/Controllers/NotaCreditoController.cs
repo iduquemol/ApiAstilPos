@@ -28,6 +28,86 @@ namespace ApiAstilPos.Controllers
             return _configuration.GetConnectionString("SqlConnectionString");
         }
 
+        [HttpGet("notascredito")]
+        public async Task<IActionResult> GetNotaCredito([FromQuery] long? idNotaCredito = null)
+        {
+            _logger.LogInformation("Obteniendo lista de notas crédito");
+
+            try
+            {
+                var notasCredito = new List<NotaCredito>();
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Read_notasCreditoId", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@idNotaCredito", (object?)idNotaCredito ?? DBNull.Value);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                var json = reader.IsDBNull(reader.GetOrdinal("notasCredito"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("notasCredito"));
+
+                                notasCredito = JsonConvert.DeserializeObject<List<NotaCredito>>(json) ?? new List<NotaCredito>();
+                            }
+                        }
+                    }
+                }
+
+                _logger.LogInformation($"Notas crédito obtenidas: {notasCredito.Count}");
+                return Ok(notasCredito);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener notas crédito");
+                return StatusCode(500, new { error = true, idNotaCredito = 0, mensaje = $"Error interno: {ex.Message}" });
+            }
+        }
+
+        [HttpGet("tipos-documento-notas-credito")]
+        public async Task<IActionResult> GetTiposDocumentoNotaCredito([FromQuery] long? idTipoDocumentoExterno = null)
+        {
+            _logger.LogInformation("Obteniendo lista de tipos de documento notas crédito");
+
+            try
+            {
+                string jsonResult = "[]";
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Read_tiposDocumentoNotasCredito", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@idTipoDocumentoExterno", (object?)idTipoDocumentoExterno ?? DBNull.Value);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                jsonResult = reader.IsDBNull(reader.GetOrdinal("tiposDocumentoVentas"))
+                                    ? "[]"
+                                    : reader.GetString(reader.GetOrdinal("tiposDocumentoVentas"));
+                            }
+                        }
+                    }
+                }
+
+                _logger.LogInformation($"Tipos de documento notas crédito obtenidos correctamente");
+                // Devolver la cadena JSON cruda de SQL Server directamente al frontend
+                return Content(jsonResult, "application/json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener tipos de documentos notas crédito");
+                return StatusCode(500, new { error = true, idTipoDocumentoExterno = 0, mensaje = $"Error interno: {ex.Message}" });
+            }
+        }
+
+
         [HttpPost("obtener-nota-credito")]
         public async Task<IActionResult> PostNotaCreditoId([FromBody] JObject request)
         {
