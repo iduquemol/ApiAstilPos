@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ApiAstilPos.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using ApiAstilPos.Models;
 using System.Data;
-using Microsoft.Data.SqlClient;
+using System.Text;
 using System.Text.Json;
 
 namespace ApiAstilPos.Controllers
@@ -60,6 +61,57 @@ namespace ApiAstilPos.Controllers
             {
                 _logger.LogError($"Error al obtener productos: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
+        [HttpGet("productos-compra")]
+        public async Task<IActionResult> GetProductosCompra()
+        {
+            _logger.LogInformation("Obteniendo lista de productos de compra");
+
+            try
+            {
+                var jsonBuilder = new StringBuilder();
+
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+
+                    using (var command = new SqlCommand("sp_Read_productosCompra", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            int ordinal = reader.GetOrdinal("productosVenta");
+
+                            while (await reader.ReadAsync())
+                            {
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonBuilder.Append(reader.GetString(ordinal));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                string jsonResult = jsonBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(jsonResult))
+                {
+                    return Ok(new List<Producto>());
+                }
+
+                var productos = JsonConvert.DeserializeObject<List<Producto>>(jsonResult);
+
+                _logger.LogInformation($"Productos obtenidos: {productos?.Count ?? 0}");
+                return Ok(productos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener productos de compra");
+                return StatusCode(StatusCodes.Status500InternalServerError, new { mensaje = "Error al procesar la solicitud", detalle = ex.Message });
             }
         }
 
