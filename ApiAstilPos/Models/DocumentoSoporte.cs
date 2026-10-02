@@ -34,15 +34,13 @@ namespace ApiAstilPos.Models
         public decimal? TotalReteIcaDsa { get; set; }
         public long? IdTipoOperacionDian { get; set; }
         public long? IdTipoDocumentoExterno { get; set; }
-        public string? CodigoDocumento { get; set; }
-        public string? NombreDocumento { get; set; }
         public DateTime? FechaInicialServicio { get; set; }
         public DateTime? FechaFinalServicio { get; set; }
-        public long? IdMetodoDian { get; set; }
-        public string? EstadoDian { get; set; }
 
-        public DocumentoSoporteTercero[] TerceroDsa { get; set; }
+        public bool? ValidadoDian { get; set; }
+        public DateTime? FechaGrabacionDsa { get; set; }
 
-        public DetalleDocumentoSoporte[] DetalleDsa { get; set; }
+        public DocumentoSoporteTercero[]? TerceroDsa { get; set; }
+        public DetalleDocumentoSoporte[]? DetalleDsa { get; set; }
     }
 }

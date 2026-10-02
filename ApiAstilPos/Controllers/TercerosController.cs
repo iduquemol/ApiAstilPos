@@ -65,9 +65,9 @@ namespace ApiAstilPos.Controllers
         }
 
         [HttpGet("terceros")]
-        public async Task<IActionResult> GetTerceros()
+        public async Task<IActionResult> GetTerceros([FromQuery] long? idTercero = null, [FromQuery] short? tipoTercero = null)
         {
-            _logger.LogInformation("Obteniendo lista de terceros");
+            _logger.LogInformation($"Obteniendo lista de terceros. IdTercero: {idTercero}, TipoTercero: {tipoTercero}");
 
             try
             {
@@ -79,6 +79,10 @@ namespace ApiAstilPos.Controllers
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
+                        // Agregar parámetros al comando SQL
+                        command.Parameters.AddWithValue("@idTercero", (object)idTercero ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@tipoTercero", (object)tipoTercero ?? DBNull.Value);
+
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
@@ -86,7 +90,7 @@ namespace ApiAstilPos.Controllers
                                 var jsonTerceros = reader.IsDBNull(reader.GetOrdinal("tercero"))
                                     ? "[]"
                                     : reader.GetString(reader.GetOrdinal("tercero"));
-                                terceros = JsonConvert.DeserializeObject<List<Tercero>>(jsonTerceros);
+                                terceros = JsonConvert.DeserializeObject<List<Tercero>>(jsonTerceros) ?? new List<Tercero>();
                             }
                         }
                     }
