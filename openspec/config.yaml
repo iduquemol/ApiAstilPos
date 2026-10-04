@@ -1,0 +1,86 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  Producto: Backend (API) del sistema POS para el mercado colombiano, con
+  facturación electrónica DIAN y notas de crédito. Es el backend que consume
+  el frontend del proyecto hermano `pos-itq` (React + Vite).
+
+  Stack:
+  - ASP.NET Core Web API (.NET 8), C#
+  - Acceso a datos: ADO.NET directo (SqlConnection/SqlCommand) contra SQL Server,
+    NO Entity Framework. Toda la lógica de negocio vive en stored procedures
+    (sp_Read_*, sp_Create_*, sp_Update_*, sp_Delete_*, sp_Search_*, sp_Print_*);
+    los controllers son delgados y solo invocan el SP correspondiente
+  - Serialización: Newtonsoft.Json (JsonConvert), no System.Text.Json, aunque
+    algunos controllers reciben el body como System.Text.Json.JsonElement
+  - Logging: Serilog (consola + archivo rolling en logs/), vía ILogger<T> inyectado
+  - PDFs: QuestPDF (ver Services/FacturaPdfService.cs); códigos QR: QRCoder
+  - Email: MailKit (ver Services/EMailService.cs)
+  - Integraciones externas: proveedor de facturación electrónica
+    (iqsas.apifacturacionelectronica.com) vía HttpClient estático por controller
+    (no IHttpClientFactory); URLs y tokens en appsettings.json, sección "ApiExterna"
+  - Documentación de API: Swashbuckle/Swagger
+
+  Estructura de carpetas:
+  - Controllers/        -> un controller por entidad de negocio (Productos,
+    Terceros, Ventas, NotaCredito, Portal, TipoDocumento, ...), todos bajo
+    [Route("api")] con rutas explícitas por HttpGet/HttpPost/HttpPut/HttpDelete
+  - Models/              -> clases POCO planas, una por archivo, PascalCase,
+    deserializadas desde el JSON que devuelven los SPs (vía FOR JSON en SQL)
+  - Services/            -> servicios con lógica propia no ligada a un endpoint
+    (FacturaPdfService, EmailService)
+  - Images/              -> assets estáticos empaquetados vía <None Update> en
+    el .csproj (CopyToOutputDirectory) - cuidado con mayúsculas/minúsculas en
+    las rutas de archivo: en Windows no importa, pero el contenedor Linux de
+    producción SÍ distingue mayúsculas (ya hubo un bug real por esto)
+  - appsettings.json     -> contiene secretos en texto plano (connection string,
+    bearer tokens, password de email). Está en .gitignore. En producción
+    (Azure Container Apps) los valores se pueden sobrescribir con variables de
+    entorno (Section__Key), que tienen prioridad sobre appsettings.json - esto
+    ya causó una incidencia real (una env var vieja pisaba una credencial nueva)
+
+  Convenciones:
+  - Patrón uniforme en cada acción de controller: try { ...; _logger.LogInformation(...);
+    return Ok(...); } catch (Exception ex) { _logger.LogError($"Error al ...: {ex.Message}");
+    return BadRequest($"Error: {ex.Message}"); } - sin middleware global de excepciones
+  - Sin envelope de respuesta ({success,data,error}): los endpoints devuelven el
+    dato crudo (array/objeto) vía Ok(...), o un objeto anónimo simple
+    ({ message, rowsAffected }) para create/update
+  - Nombres de rutas en kebab-case cuando tienen más de una palabra
+    (terceros-busqueda, terceros-consulta-externa, preview-pdf)
+  - Varios endpoints reciben JsonElement crudo y leen propiedades con
+    TryGetProperty en vez de bindear a un modelo tipado, sobre todo cuando el
+    body se reenvía casi igual al SP
+  - Testing: no hay test runner configurado en este proyecto todavía (sin
+    xUnit/NUnit); validar manualmente o proponer agregarlo si una spec lo
+    requiere explícitamente
+
+  Proyecto hermano: el frontend vive en `C:\Estudio\pos-itq` (repo aparte, con
+  su propio OpenSpec). Un cambio que toque el contrato de un endpoint
+  (request/response) probablemente requiere un cambio espejo allá - mencionarlo
+  explícitamente en el proposal cuando aplique.
+
+# Per-artifact rules (optional)
+rules:
+  proposal:
+    - Si el cambio afecta el contrato de un endpoint ya consumido por el
+      frontend (pos-itq), decirlo explícitamente en el impacto
+    - Explicar el impacto en facturación electrónica DIAN cuando aplique, no
+      solo el cambio técnico
+  design:
+    - Seguir el patrón ya existente (SqlCommand + stored procedure) en vez de
+      introducir Entity Framework u otro ORM sin justificarlo explícitamente
+    - Reutilizar el HttpClient estático por controller y la sección
+      "ApiExterna" de appsettings.json para integraciones externas nuevas, en
+      vez de crear un patrón de configuración distinto
+    - No commitear secretos nuevos directamente en appsettings.json sin
+      señalarlo como riesgo en el documento
+  tasks:
+    - Incluir un paso de verificación manual (no hay test runner configurado);
+      si la tarea justifica pruebas automatizadas, proponer agregar xUnit como
+      tarea explícita en vez de asumir que ya existe
+    - Si el cambio toca un stored procedure, incluir una tarea para confirmar
+      su comportamiento real contra la base de datos antes de dar la
+      implementación por completa

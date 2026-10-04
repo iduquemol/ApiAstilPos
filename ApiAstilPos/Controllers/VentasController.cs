@@ -424,6 +424,192 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpPost("ventas-externa-novasoft")]
+        public async Task<IActionResult> CreateVentaExternaNovasoft([FromBody] JsonElement request)
+        {
+            _logger.LogInformation("Creando una nueva venta externa Novasoft");
+
+            try
+            {
+                string requestBody = request.GetRawText();
+                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
+
+                object bodyDian = null;
+                byte[] attachedDocumentBytes = null;
+                string cufe = string.Empty;
+                string firmaDigital = string.Empty;
+                string qrCode = string.Empty;
+                long idVenta = 0;
+
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Create_ventaExternaNovasoft", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@ventaExternaNovasoft", requestBody ?? (object)DBNull.Value);
+
+                        var paramIdVenta = new SqlParameter("@idVenta", SqlDbType.BigInt)
+                        {
+                            Direction = ParameterDirection.Output
+                        };
+                        command.Parameters.Add(paramIdVenta);
+
+                        await command.ExecuteNonQueryAsync();
+
+                        idVenta = paramIdVenta.Value != DBNull.Value
+                            ? Convert.ToInt64(paramIdVenta.Value)
+                            : 0;
+
+                        _logger.LogInformation($"Venta externa Novasoft creada correctamente. ID: {idVenta}");
+                    }
+
+                    using (var command2 = new SqlCommand("sp_Read_ventaIdDian", connection))
+                    {
+                        command2.CommandType = CommandType.StoredProcedure;
+                        command2.Parameters.AddWithValue("@idVenta", idVenta);
+                        command2.Parameters.AddWithValue("@idMetodoDian", 1);
+
+                        bodyDian = await command2.ExecuteScalarAsync();
+                        _logger.LogInformation($"Body DIAN: {bodyDian}");
+                    }
+
+                    if (bodyDian == null)
+                    {
+                        _logger.LogError($"No se pudo obtener el Body DIAN para el ID de venta {idVenta}");
+                        return BadRequest("Error: No se pudo generar el cuerpo para la DIAN.");
+                    }
+
+                    _logger.LogInformation($"JSON enviado a la API externa para la venta externa Novasoft {idVenta}:\n{bodyDian}");
+
+                    var apiResponse = await CallExternalApiAsync(bodyDian.ToString(), idVenta, 1);
+
+                    if (apiResponse.IsSuccess)
+                    {
+                        _logger.LogInformation("API externa llamada exitosamente.");
+
+                        // Extraer el documento adjunto en base64
+                        string attachedDocumentBase64 = ExtraerAttachedDocumentBase64(apiResponse.contentResponse);
+
+                        if (!string.IsNullOrEmpty(attachedDocumentBase64))
+                        {
+                            // Convertir de base64 a bytes si es necesario
+                            attachedDocumentBytes = Convert.FromBase64String(attachedDocumentBase64);
+                            _logger.LogInformation($"Documento adjunto obtenido, tamaño: {attachedDocumentBytes.Length} bytes");
+                        }
+
+                        using (var command = new SqlCommand("sp_Insert_responseDian", connection))
+                        {
+                            command.CommandType = CommandType.StoredProcedure;
+
+                            // 1. Parámetro de entrada
+                            command.Parameters.AddWithValue("@responseDianJson", apiResponse.contentResponse ?? (object)DBNull.Value);
+
+                            var pIdResponseDian = command.Parameters.Add("@idResponseDian", SqlDbType.BigInt);
+                            pIdResponseDian.Direction = ParameterDirection.InputOutput; // O ParameterDirection.Output
+                            pIdResponseDian.Value = 0;
+
+                            var pCufe = command.Parameters.Add("@cufe", SqlDbType.NVarChar, 255);
+                            pCufe.Direction = ParameterDirection.Output;
+
+                            var pFirmaDigital = command.Parameters.Add("@firmaDigital", SqlDbType.NVarChar, -1);
+                            pFirmaDigital.Direction = ParameterDirection.Output;
+
+                            var pQrCode = command.Parameters.Add("@qrCode", SqlDbType.NVarChar, -1);
+                            pQrCode.Direction = ParameterDirection.Output;
+
+                            await command.ExecuteNonQueryAsync();
+
+                            var idResponseDianObtenido = pIdResponseDian.Value;
+                            cufe = pCufe.Value != DBNull.Value
+                            ? pCufe.Value.ToString()
+                            : string.Empty;
+
+                            qrCode = pQrCode.Value != DBNull.Value
+                            ? pQrCode.Value.ToString()
+                            : string.Empty;
+
+                            _logger.LogInformation("Response venta externa Novasoft Dian creada correctamente.");
+                        }
+
+                        // ENVIAR EMAIL
+                        // Obtener datos para imprimir la factura
+                        PrintVenta printVenta = null;
+                        using (var command = new SqlCommand("sp_Print_ventaId", connection))
+                        {
+                            command.CommandType = CommandType.StoredProcedure;
+                            command.Parameters.AddWithValue("@idVenta", idVenta);
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    var jsonVenta = reader.IsDBNull(reader.GetOrdinal("venta"))
+                                        ? "[]"
+                                        : reader.GetString(reader.GetOrdinal("venta"));
+                                    printVenta = JsonConvert.DeserializeObject<PrintVenta>(jsonVenta);
+                                }
+                            }
+                        }
+
+                        // Generar PDF
+                        var pdfService = new FacturaPdfService();
+                        printVenta.Cufe = cufe;
+                        printVenta.CodigoQR = qrCode;
+                        byte[] pdfBytes = pdfService.GenerarPdfFactura(printVenta, 1);
+
+                        _logger.LogInformation("PDF de venta externa Novasoft generado correctamente.");
+
+                        try
+                        {
+                            var facturaEmailDto = new FacturaEmailDto
+                            {
+                                Email = printVenta.ClienteEmail,
+                                NombreCliente = printVenta.ClienteRazonSocial,
+                                NumeroDocumento = apiResponse.numeroFacturaDian,
+                                SubjectEmail = printVenta.SubjectEmail ?? string.Empty,
+                                Total = printVenta.TotalVenta,
+                                PdfAttachment = pdfBytes,
+                                PdfFileName = $"Factura_{apiResponse.numeroFacturaDian}.pdf",
+                                XmlAttachment = attachedDocumentBytes,
+                                XmlFileName = $"Factura_{apiResponse.numeroFacturaDian}.xml",
+                                FacturadorNombre = printVenta.FacturadorNombre ?? string.Empty,
+                            };
+
+                            await _emailService.SendFacturaEmailAsync(facturaEmailDto, 1);
+                            _logger.LogInformation($"Email enviado exitosamente a {facturaEmailDto.Email}");
+                        }
+                        catch (Exception emailEx)
+                        {
+                            _logger.LogWarning($"Venta externa Novasoft creada pero falló el envío de email: {emailEx.Message}");
+                        }
+
+                        return Ok(new
+                        {
+                            message = "Venta externa Novasoft creada correctamente",
+                            idVenta,
+                            numeroDocumentoDian = apiResponse.numeroFacturaDian
+                        });
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Error en API externa: {apiResponse.ErrorMessage}");
+                        return Ok(new
+                        {
+                            message = "Venta externa Novasoft creada correctamente, pero hubo un error en la API externa",
+                            idVenta,
+                            externalApiError = apiResponse.ErrorMessage
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al crear venta externa Novasoft: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
         [HttpPost("preview-pdf")]
         public async Task<IActionResult> PreviewPdf([FromBody] JsonElement request)
         {
