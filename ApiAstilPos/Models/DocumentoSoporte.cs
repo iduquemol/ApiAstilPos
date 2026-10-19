@@ -1,11 +1,15 @@
 ﻿#nullable enable
 using System;
+using System.Collections.Generic;
 
 namespace ApiAstilPos.Models
 {
     public class DocumentoSoporte
     {
         public long IdDsa { get; set; }
+
+        public long? Dsa { get; set; }
+
         public long IdTipoDocumentoDsa { get; set; }
         public long NumeroDsa { get; set; }
         public string PrefijoDsa { get; set; } = string.Empty;
@@ -37,10 +41,13 @@ namespace ApiAstilPos.Models
         public DateTime? FechaInicialServicio { get; set; }
         public DateTime? FechaFinalServicio { get; set; }
 
+        public long? IdMetodoDian { get; set; }
+
         public bool? ValidadoDian { get; set; }
         public DateTime? FechaGrabacionDsa { get; set; }
 
-        public DocumentoSoporteTercero[]? TerceroDsa { get; set; }
-        public DetalleDocumentoSoporte[]? DetalleDsa { get; set; }
+        public DocumentoSoporteTercero? TerceroDsa { get; set; }
+
+        public List<DetalleDocumentoSoporte>? DetalleDsa { get; set; }
     }
 }

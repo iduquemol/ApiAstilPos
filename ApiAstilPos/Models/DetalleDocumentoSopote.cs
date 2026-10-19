@@ -28,5 +28,7 @@ namespace ApiAstilPos.Models
         public decimal? ReteIcaDsa { get; set; }
         public string? NombreProducto { get; set; }
         public DateTime? FechaGrabacionDetalleDsa { get; set; }
+
+        public long? IdTipoProducto { get; set; }
     }
 }
