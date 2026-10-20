@@ -143,56 +143,6 @@ namespace ApiAstilPos.Controllers
             }
         }
 
-
-        [HttpPost("dsa-create")]
-        public async Task<IActionResult> CreateDsa([FromBody] DocumentoSoporte dsa)
-        {
-            _logger.LogInformation("Creando un nuevo Documento Soporte de Adquisición");
-
-            try
-            {
-                string requestBody = JsonConvert.SerializeObject(dsa, new JsonSerializerSettings
-                {
-                    ContractResolver = new CamelCasePropertyNamesContractResolver()
-                });
-                _logger.LogInformation($"Cuerpo de la solicitud: {requestBody}");
-
-                object dsaId = null;
-
-                using (var connection = new SqlConnection(GetConnectionString()))
-                {
-                    await connection.OpenAsync();
-
-                    using (var command = new SqlCommand("sp_Create_Dsa", connection))
-                    {
-                        command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@dsa", requestBody ?? (object)DBNull.Value);
-
-                        dsaId = await command.ExecuteScalarAsync();
-                        _logger.LogInformation("Documento Soporte creado correctamente.");
-                    }
-
-                    if (dsaId == null || Convert.ToInt64(dsaId) <= 0)
-                    {
-                        _logger.LogError("No se pudo obtener un ID de DSA válido.");
-                        return BadRequest("Error: No se pudo crear el Documento Soporte.");
-                    }
-
-                    return Ok(new
-                    {
-                        message = "Documento Soporte creado correctamente.",
-                        idDsa = dsaId
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error al crear Documento Soporte: {ex.Message}");
-                return BadRequest($"Error: {ex.Message}");
-            }
-        }
-
-        /*
         [HttpPost("dsa-create")]
         public async Task<IActionResult> CreateDsa([FromBody] DocumentoSoporte dsa)
         {
@@ -232,17 +182,23 @@ namespace ApiAstilPos.Controllers
                         return BadRequest("Error: No se pudo crear el Documento Soporte.");
                     }
 
-                    using (var command2 = new SqlCommand("sp_Read_dsaldDian", connection))
+                    using (var command2 = new SqlCommand("sp_Read_DsaIdDian", connection))
                     {
                         command2.CommandType = CommandType.StoredProcedure;
                         command2.Parameters.AddWithValue("@idDsa", dsaId);
-                        command2.Parameters.AddWithValue("@idMetodoDian", dsa.IdMetodoDian);
+                        command2.Parameters.AddWithValue("@idMetodoDian", 5); 
 
-                        bodyDian = await command2.ExecuteScalarAsync();
-                        _logger.LogInformation($"Body DIAN DSA: {bodyDian}");
+                        using (var reader2 = await command2.ExecuteReaderAsync())
+                        {
+                            if (await reader2.ReadAsync())
+                            {
+                                bodyDian = reader2.IsDBNull(0) ? null : reader2.GetString(0);
+                            }
+                        }
+                        _logger.LogInformation($"Body DIAN DSA obtenido: {bodyDian}");
                     }
 
-                    if (bodyDian == null)
+                    if (bodyDian == null || string.IsNullOrEmpty(bodyDian.ToString()))
                     {
                         _logger.LogError($"No se pudo obtener el Body DIAN para el ID DSA {dsaId}");
                         return BadRequest("Error: No se pudo generar el cuerpo para la DIAN.");
@@ -250,7 +206,7 @@ namespace ApiAstilPos.Controllers
 
                     _logger.LogInformation($"JSON enviado a la API externa para el Documento Soporte {dsaId}:\n{bodyDian}");
 
-                    var apiResponse = await CallExternalApiAsync(bodyDian.ToString(), dsaId, dsa.IdMetodoDian);
+                    var apiResponse = await CallExternalApiAsync(bodyDian.ToString());
 
                     if (apiResponse.IsSuccess)
                     {
@@ -285,64 +241,13 @@ namespace ApiAstilPos.Controllers
 
                             await command.ExecuteNonQueryAsync();
 
-                            var idResponseDianObtenido = pIdResponseDian.Value;
                             cufe = pCufe.Value != DBNull.Value ? pCufe.Value.ToString() : string.Empty;
                             qrCode = pQrCode.Value != DBNull.Value ? pQrCode.Value.ToString() : string.Empty;
 
                             _logger.LogInformation("Response Factura Dian para DSA creada correctamente.");
                         }
 
-                        /* 
-                        PrintDsa printDsa = null;
-                        using (var command = new SqlCommand("sp_Print_dsaId", connection))
-                        {
-                            command.CommandType = CommandType.StoredProcedure;
-                            command.Parameters.AddWithValue("@idDsa", dsaId);
-
-                            using (var reader = await command.ExecuteReaderAsync())
-                            {
-                                while (await reader.ReadAsync())
-                                {
-                                    var jsonDsa = reader.IsDBNull(reader.GetOrdinal("dsa"))
-                                        ? "[]"
-                                        : reader.GetString(reader.GetOrdinal("dsa"));
-                                    printDsa = JsonConvert.DeserializeObject<PrintDsa>(jsonDsa);
-                                }
-                            }
-                        }
-
-                        var pdfService = new FacturaPdfService();
-                        printDsa.Cufe = cufe;
-                        printDsa.CodigoQR = qrCode;
-                        byte[] pdfBytes = pdfService.GenerarPdfDocumentoSoporte(printDsa, Convert.ToInt32(dsa.IdMetodoDian));
-                        _logger.LogInformation("PDF de Documento Soporte generado correctamente.");
-
-                        try
-                        {
-                            var facturaEmailDto = new FacturaEmailDto
-                            {
-                                Email = printDsa.ClienteEmail,
-                                NombreCliente = printDsa.ClienteRazonSocial,
-                                NumeroDocumento = apiResponse.numeroFacturaDian,
-                                SubjectEmail = printDsa.SubjectEmail ?? string.Empty,
-                                Total = printDsa.TotalVenta,
-                                PdfAttachment = pdfBytes,
-                                PdfFileName = $"DocumentoSoporte_{apiResponse.numeroFacturaDian}.pdf",
-                                XmlAttachment = attachedDocumentBytes,
-                                XmlFileName = $"DocumentoSoporte_{apiResponse.numeroFacturaDian}.xml",
-                                FacturadorNombre = printDsa.FacturadorNombre ?? string.Empty,
-                            };
-
-                            await _emailService.SendFacturaEmailAsync(facturaEmailDto, Convert.ToInt32(dsa.IdMetodoDian));
-                            _logger.LogInformation($"Email enviado exitosamente a {facturaEmailDto.Email}");
-                        }
-                        catch (Exception emailEx)
-                        {
-                            _logger.LogWarning($"Documento Soporte creado pero falló el envío de email: {emailEx.Message}");
-                        }
-                         */
-
-                        /*return Ok(new
+                        return Ok(new
                         {
                             message = "Documento Soporte creado y procesado correctamente en la DIAN",
                             idDsa = dsaId,
@@ -366,6 +271,142 @@ namespace ApiAstilPos.Controllers
                 _logger.LogError($"Error al crear Documento Soporte: {ex.Message}");
                 return BadRequest(new { error = true, mensaje = ex.Message, inner = ex.InnerException?.Message });
             }
-        }*/
+        }
+
+        private async Task<ApiResponse> CallExternalApiAsync(string originalRequestBody)
+        {
+            try
+            {
+                ResponseDian responseDian = new ResponseDian();
+                string apiUrl = _configuration["ApiExterna:DsaUrl"];
+                var bearerToken = _configuration["ApiExterna:BearerToken"];
+
+                if (string.IsNullOrEmpty(apiUrl) || string.IsNullOrEmpty(bearerToken))
+                {
+                    _logger.LogError("URL de API externa o Bearer Token no configurados");
+                    return new ApiResponse { IsSuccess = false, ErrorMessage = "Configuración de API externa faltante" };
+                }
+
+                var content = new StringContent(originalRequestBody, Encoding.UTF8, "application/json");
+
+                httpClient.DefaultRequestHeaders.Clear();
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
+
+                _logger.LogInformation($"Llamando a API externa: {apiUrl}");
+
+                var response = await httpClient.PostAsync(apiUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogInformation($"API externa respondió exitosamente: {response.StatusCode}");
+                    responseDian = JsonConvert.DeserializeObject<ResponseDian>(responseContent);
+
+                    return new ApiResponse
+                    {
+                        IsSuccess = true,
+                        numeroFacturaDian = responseDian.Number,
+                        contentResponse = responseContent,
+                    };
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Error en API externa: {response.StatusCode} - {errorContent}");
+
+                    return new ApiResponse
+                    {
+                        IsSuccess = false,
+                        ErrorMessage = $"API externa falló: {response.StatusCode} - {errorContent} - {apiUrl}"
+                    };
+                }
+            }
+            catch (HttpRequestException httpEx)
+            {
+                _logger.LogError($"Error de conexión con API externa: {httpEx.Message}");
+                return new ApiResponse { IsSuccess = false, ErrorMessage = $"Error de conexión: {httpEx.Message}" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error inesperado al llamar API externa: {ex.Message}");
+                return new ApiResponse { IsSuccess = false, ErrorMessage = $"Error inesperado: {ex.Message}" };
+            }
+        }
+
+        private string ExtraerAttachedDocumentBase64(string xmlContent)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(xmlContent))
+                {
+                    _logger.LogWarning("Contenido XML vacío para extraer attached_document_base64_bytes");
+                    return string.Empty;
+                }
+
+                var jsonResponse = JObject.Parse(xmlContent);
+
+                var attachedDocumentBase64 = jsonResponse["attached_document_base64_bytes"]?.ToString();
+
+                if (!string.IsNullOrEmpty(attachedDocumentBase64))
+                {
+                    _logger.LogInformation("attached_document_base64_bytes extraído exitosamente del JSON");
+                    return attachedDocumentBase64;
+                }
+
+                var xmlString = jsonResponse["xml"]?.ToString() ??
+                               jsonResponse["AttachedDocument"]?.ToString() ??
+                               xmlContent;
+
+                if (xmlString.Contains("attached_document_base64_bytes"))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        xmlString,
+                        @"<attached_document_base64_bytes>(.*?)</attached_document_base64_bytes>",
+                        System.Text.RegularExpressions.RegexOptions.Singleline
+                    );
+
+                    if (match.Success && match.Groups.Count > 1)
+                    {
+                        attachedDocumentBase64 = match.Groups[1].Value.Trim();
+                        _logger.LogInformation($"attached_document_base64_bytes extraído del XML, tamaño: {attachedDocumentBase64.Length} caracteres");
+                        return attachedDocumentBase64;
+                    }
+                }
+
+                _logger.LogWarning("No se encontró attached_document_base64_bytes en el contenido");
+                return string.Empty;
+            }
+            catch (JsonException jsonEx)
+            {
+                _logger.LogError($"Error al parsear JSON para extraer attached_document_base64_bytes: {jsonEx.Message}");
+
+                try
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        xmlContent,
+                        @"<attached_document_base64_bytes>(.*?)</attached_document_base64_bytes>",
+                        System.Text.RegularExpressions.RegexOptions.Singleline
+                    );
+
+                    if (match.Success && match.Groups.Count > 1)
+                    {
+                        var result = match.Groups[1].Value.Trim();
+                        _logger.LogInformation($"attached_document_base64_bytes extraído del XML puro, tamaño: {result.Length} caracteres");
+                        return result;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error al procesar XML: {ex.Message}");
+                }
+
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error inesperado al extraer attached_document_base64_bytes: {ex.Message}");
+                return string.Empty;
+            }
+        }
     }
 }
