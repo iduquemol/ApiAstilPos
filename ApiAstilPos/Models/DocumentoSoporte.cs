@@ -43,7 +43,7 @@ namespace ApiAstilPos.Models
 
         public long? IdMetodoDian { get; set; }
 
-        public bool? ValidadoDian { get; set; }
+        public string? EstadoDian { get; set; }
         public DateTime? FechaGrabacionDsa { get; set; }
 
         public DocumentoSoporteTercero? TerceroDsa { get; set; }
