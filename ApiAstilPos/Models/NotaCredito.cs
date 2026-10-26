@@ -41,6 +41,7 @@ namespace ApiAstilPos.Models
         public short? PlazoDias { get; set; }
         public DateTime? FechaVencimiento { get; set; }
         public long? IdTipoDocumentoExterno { get; set; }
+        public long? IdMetodoDian { get; set; }
         public NotaCreditoDetalle[] DetalleNotaCredito { get; set; }
 
         public string? CodigoDocumento { get; set; }
