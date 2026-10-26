@@ -12,6 +12,7 @@ namespace ApiAstilPos.Models
         public string EmailUsuario { get; set; } = string.Empty;
         public long? IdVendedor { get; set; }
         public long? IdSucursalUsuario { get; set; }
+        public long? IdAlmacen { get; set; }
         public DateTime? FechaGrabacionUsuario { get; set; }
     }
 }
