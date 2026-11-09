@@ -143,6 +143,47 @@ namespace ApiAstilPos.Controllers
             }
         }
 
+        [HttpGet("notadebito")]
+        public async Task<IActionResult> GetTiposDocumentoNotaDebito([FromQuery] long? idTipoDocumentoExterno = null)
+        {
+            _logger.LogInformation("Obteniendo lista de tipos de documento de notas débito");
+
+            try
+            {
+                string jsonTiposDocumento = "[]";
+
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand("sp_Read_tiposDocumentoNotasDebito", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+
+                        command.Parameters.Add("@idTipoDocumentoExterno", SqlDbType.BigInt).Value =
+                            (object)idTipoDocumentoExterno ?? DBNull.Value;
+
+                        var result = await command.ExecuteScalarAsync();
+
+                        if (result != null && result != DBNull.Value)
+                        {
+                            jsonTiposDocumento = result.ToString();
+                        }
+                    }
+                }
+
+                var tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonTiposDocumento)
+                                     ?? new List<TipoDocumento>();
+
+                _logger.LogInformation($"Tipos de documento de nota débito obtenidos: {tiposDocumento.Count}");
+                return Ok(tiposDocumento);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error al obtener tipos de documento de nota débito: {ex.Message}");
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
         [HttpGet("tipos-documento-dsa")]
         public async Task<IActionResult> GetTiposDocumentoDsa([FromQuery] long? idTipoDocumentoExterno = null)
         {
@@ -193,6 +234,57 @@ namespace ApiAstilPos.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al obtener tipos de documento DSA");
+                return StatusCode(StatusCodes.Status500InternalServerError, new { mensaje = "Error interno del servidor", detalle = ex.Message });
+            }
+        }
+
+        [HttpGet("tipos-documento-cotizacion")]
+        public async Task<IActionResult> GetTiposDocumentoCotizacion()
+        {
+            _logger.LogInformation("Obteniendo tipos de documento de cotización");
+
+            try
+            {
+                var jsonBuilder = new StringBuilder();
+
+                using (var connection = new SqlConnection(GetConnectionString()))
+                {
+                    await connection.OpenAsync();
+
+                    using (var command = new SqlCommand("sp_Read_tiposDocumentoCotizacion", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            int ordinal = reader.GetOrdinal("tiposDocumentoCotizacion");
+
+                            while (await reader.ReadAsync())
+                            {
+                                if (!reader.IsDBNull(ordinal))
+                                {
+                                    jsonBuilder.Append(reader.GetString(ordinal));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                string jsonResult = jsonBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(jsonResult))
+                {
+                    return Ok(new List<TipoDocumento>());
+                }
+
+                var tiposDocumento = JsonConvert.DeserializeObject<List<TipoDocumento>>(jsonResult);
+
+                _logger.LogInformation($"Tipos de documento de cotización obtenidos: {tiposDocumento?.Count ?? 0}");
+                return Ok(tiposDocumento);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener tipos de documento de cotización");
                 return StatusCode(StatusCodes.Status500InternalServerError, new { mensaje = "Error interno del servidor", detalle = ex.Message });
             }
         }

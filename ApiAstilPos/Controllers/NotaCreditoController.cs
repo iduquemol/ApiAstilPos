@@ -112,7 +112,7 @@ namespace ApiAstilPos.Controllers
         [HttpPost("obtener-nota-credito")]
         public async Task<IActionResult> PostNotaCreditoId([FromBody] JObject request)
         {
-            _logger.LogInformation("Procesando solicitud para obtener venta por ID");
+            _logger.LogInformation("Procesando solicitud para obtener nota crédito por ID");
 
             try
             {
@@ -139,14 +139,14 @@ namespace ApiAstilPos.Controllers
                             }
                         }
 
-                        _logger.LogInformation("Venta obtenida correctamente.");
+                        _logger.LogInformation("Nota crédito obtenida correctamente.");
                         return Ok(venta);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener venta: {ex.Message}");
+                _logger.LogError($"Error al obtener nota crédito: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
@@ -154,7 +154,7 @@ namespace ApiAstilPos.Controllers
         [HttpPost("print-nota-credito")]
         public async Task<IActionResult> PrintNotaCreditoId([FromBody] JObject request)
         {
-            _logger.LogInformation("Procesando solicitud para imprimir venta por ID");
+            _logger.LogInformation("Procesando solicitud para imprimir nota crédito por ID");
 
             try
             {
@@ -181,14 +181,14 @@ namespace ApiAstilPos.Controllers
                             }
                         }
 
-                        _logger.LogInformation("Venta para imprimir obtenida correctamente.");
+                        _logger.LogInformation("Nota crédito para imprimir obtenida correctamente.");
                         return Ok(printVenta);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error al obtener venta: {ex.Message}");
+                _logger.LogError($"Error al obtener nota crédito: {ex.Message}");
                 return BadRequest($"Error: {ex.Message}");
             }
         }
@@ -196,7 +196,7 @@ namespace ApiAstilPos.Controllers
         [HttpPost("notacredito")]
         public async Task<IActionResult> CreateNotaCredito([FromBody] NotaCredito notaCredito)
         {
-            _logger.LogInformation("Creando una nueva nota credito");
+            _logger.LogInformation("Creando una nueva nota crédito");
 
             if (notaCredito == null)
             {
