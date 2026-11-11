@@ -79,27 +79,41 @@ namespace ApiAstilPos.Controllers
         [HttpPost("sincronizar-resoluciones-externas")]
         public async Task<IActionResult> SincronizarResolucionesExternas()
         {
-            _logger.LogInformation("Iniciando sincronización de resoluciones desde el proveedor externo");
+            _logger.LogInformation("Iniciando configuración y sincronización de resoluciones desde el proveedor externo");
 
             try
             {
-                var resolutionsUrl = _configuration["ApiExterna:ResolutionsUrl"];
                 var bearerToken = _configuration["ApiExterna:BearerToken"];
-
-                if (string.IsNullOrEmpty(resolutionsUrl))
-                {
-                    _logger.LogError("URL de consulta externa de resoluciones no configurada");
-                    return BadRequest("Configuración de API externa faltante");
-                }
+                var configEnvironmentUrl = _configuration["ApiExterna:ConfigEnvironmentUrl"];
+                var resolutionsUrl = _configuration["ApiExterna:ResolutionsUrl"];
 
                 using var httpClient = _httpClientFactory?.CreateClient() ?? new HttpClient();
-
                 httpClient.DefaultRequestHeaders.Clear();
+
                 if (!string.IsNullOrEmpty(bearerToken))
                 {
                     httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
                 }
 
+                // 1. Enviar el método PUT de configuración antes de consultar
+                var configBody = new { type_environment_id = 1 };
+                var jsonContent = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(configBody),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+
+                _logger.LogInformation($"Enviando configuración de entorno a: {configEnvironmentUrl}");
+                var putResponse = await httpClient.PutAsync(configEnvironmentUrl, jsonContent);
+
+                if (!putResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await putResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"Error al actualizar entorno en API externa: {putResponse.StatusCode} - {errorContent}");
+                    return BadRequest("Error al configurar el entorno en el proveedor externo");
+                }
+
+                // 2. Consultar el proveedor externo para obtener las resoluciones actualizadas
                 _logger.LogInformation($"Consultando proveedor externo en: {resolutionsUrl}");
                 var response = await httpClient.GetAsync(resolutionsUrl);
                 var responseContent = await response.Content.ReadAsStringAsync();
@@ -110,33 +124,23 @@ namespace ApiAstilPos.Controllers
                     return BadRequest("Error al consultar las resoluciones en el proveedor externo");
                 }
 
-                // Ejecución del Stored Procedure sp_Update_resolucionesFacturacionDian con parámetros OUTPUT
+                // 3. Ejecución del Stored Procedure en la base de datos
                 using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     await connection.OpenAsync();
                     using (var command = new SqlCommand("sp_Update_resolucionesFacturacionDian", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-
-                        // Parámetro de entrada con el JSON de la DIAN
                         command.Parameters.AddWithValue("@resolucionesDian", responseContent ?? (object)DBNull.Value);
 
-                        // Parámetros de salida indicados por la base de datos
-                        var errorParam = new SqlParameter("@errorOutput", SqlDbType.Bit)
-                        {
-                            Direction = ParameterDirection.Output
-                        };
-                        var mensajeParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) // -1 equivale a max
-                        {
-                            Direction = ParameterDirection.Output
-                        };
+                        var errorParam = new SqlParameter("@errorOutput", SqlDbType.Bit) { Direction = ParameterDirection.Output };
+                        var mensajeParam = new SqlParameter("@mensajeOutput", SqlDbType.NVarChar, -1) { Direction = ParameterDirection.Output };
 
                         command.Parameters.Add(errorParam);
                         command.Parameters.Add(mensajeParam);
 
                         await command.ExecuteNonQueryAsync();
 
-                        // Lectura de los valores que devuelve la BD
                         bool isError = errorParam.Value != DBNull.Value && Convert.ToBoolean(errorParam.Value);
                         string mensajeBd = mensajeParam.Value != DBNull.Value ? mensajeParam.Value.ToString() : string.Empty;
 
@@ -145,19 +149,10 @@ namespace ApiAstilPos.Controllers
                             _logger.LogError($"Error en el procedimiento almacenado: {mensajeBd}");
                             return BadRequest($"Error en base de datos: {mensajeBd}");
                         }
-
-                        _logger.LogInformation($"SP ejecutado correctamente. Mensaje BD: {mensajeBd}");
                     }
                 }
 
-                if (string.IsNullOrWhiteSpace(responseContent))
-                {
-                    return Ok(new object[] { });
-                }
-
-                // Deserializar el JSON obtenido para devolver la estructura real al frontend
                 var jsonResponse = System.Text.Json.JsonSerializer.Deserialize<object>(responseContent);
-
                 return Ok(jsonResponse);
             }
             catch (Exception ex)
