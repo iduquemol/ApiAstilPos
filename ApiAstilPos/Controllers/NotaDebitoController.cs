@@ -245,10 +245,10 @@ namespace ApiAstilPos.Controllers
                     _logger.LogInformation($"Nota Débito creada correctamente con ID: {idNotaDebito}");
 
                     // Lectura del JSON para la DIAN
-                    using (var command2 = new SqlCommand("sp_Read_notasDebitoIdDian", connection))
+                    using (var command2 = new SqlCommand("sp_Read_ventaIdDian", connection))
                     {
                         command2.CommandType = CommandType.StoredProcedure;
-                        command2.Parameters.AddWithValue("@idNotaDebito", idNotaDebito);
+                        command2.Parameters.AddWithValue("@idVenta", idNotaDebito);
                         command2.Parameters.AddWithValue("@idMetodoDian", idMetodoDian);
 
                         using (var reader2 = await command2.ExecuteReaderAsync())
