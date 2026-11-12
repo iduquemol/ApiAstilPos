@@ -13,6 +13,9 @@ namespace ApiAstilPos.Models
         public long? IdVendedor { get; set; }
         public long? IdSucursalUsuario { get; set; }
         public long? IdAlmacen { get; set; }
+        public long? IdTercero { get; set; }
+        public long? IdCargoNomina { get; set; }
+        public bool? EnviaEventos { get; set; }
         public DateTime? FechaGrabacionUsuario { get; set; }
     }
 }
